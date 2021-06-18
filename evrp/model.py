@@ -84,14 +84,29 @@ class Route:
     def __getitem__(self, index):
         return self.visit[index]
 
+    def __str__(self) -> str:
+        retstr = 'Route: D{}'.format(self.visit[0].id)
+        for node in self.visit[1:]:
+            if isinstance(node, Depot):
+                retstr += ' -> D{}'.format(node.id)
+            elif isinstance(node, Customer):
+                retstr += ' -> C{}'.format(node.id)
+            elif isinstance(node, Recharger):
+                retstr += ' -> R{}'.format(node.id)
+        return retstr
+
     def copy(self):
         return Route(self.visit_list[:])
 
     def distance(self):
         return sum(map(lambda i: self.visit[i].distance_to(self.visit[i+1]), range(len(self.visit)-1)))
 
-    def feasible(self, vehicle: Vehicle):
-        loaded_weight = vehicle.capacity
+    def feasible(self, vehicle: Vehicle, ini_load_weigh: float):
+        if ini_load_weigh == None:
+            loaded_weight = vehicle.capacity
+        else:
+            assert(ini_load_weigh <= vehicle.capacity)
+            loaded_weight = ini_load_weigh
         remain_battery = vehicle.max_battery
         at_time = 0
         for loc_index, dest in enumerate(self.visit[1:]):
@@ -148,12 +163,23 @@ class Model:
 
 class Solution:
     routes = []
+    ini_load_weight = []
 
-    def __init__(self, routes: list) -> None:
+    def __init__(self, routes: list, ini_load_weight: list = None) -> None:
         self.routes = routes
+        if ini_load_weight != None:
+            self.ini_load_weight = ini_load_weight
+        else:
+            self.ini_load_weight = [None]*len(self.routes)
 
     def __getitem__(self, index):
         return self.routes[index]
+
+    def __str__(self) -> str:
+        retstr = 'Solution: {} route{}'.format(len(self.routes), 's' if len(self.routes) != 1 else '')
+        for route in self.routes:
+            retstr += '\n'+' '*4+str(route)
+        return retstr
 
     def copy(self):
         return Solution([route.copy() for route in self.routes])
@@ -164,7 +190,7 @@ class Solution:
     def feasible(self, model: Model):
         if len(self.routes) > model.max_vehicle:
             return False
-        route_test_result = map(lambda route: route.feasible(model.vehicle), self.routes)
+        route_test_result = map(lambda route_load: route_load[0].feasible(model.vehicle, route_load[1]), zip(self.routes, self.ini_load_weight))
         if False in map(lambda x: x[0], route_test_result):
             return False
         else:
