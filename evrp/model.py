@@ -1,3 +1,4 @@
+import numpy as np
 from abc import ABCMeta
 
 
@@ -15,7 +16,8 @@ class Node(metaclass=ABCMeta):
         self.x = x
         self.y = y
 
-    def distance_to(self, node):
+    def distance_to(self, node) -> float:
+        assert isinstance(node, Node)
         return ((self.x-node.x)**2+(self.y-node.y)**2)**0.5
 
 
@@ -71,17 +73,20 @@ class Vehicle:
         self.battery_cost_speed = battery_cost_speed
         self.charge_speed = charge_speed
 
-    def copy(self):
-        return Vehicle(self.capacity, self.max_battery, self.net_weight, self.battery_cost_speed, self.charge_speed)
-
 
 class Route:
     visit = []
 
+    arrive_load_weight = None  # 到达并服务后载货量 向量
+    arrive_remain_battery = None  # 刚到达时剩余电量 向量
+    arrive_time = None  # 刚到达时的时刻 向量
+    adjacent_distance = None  # 两点距离 向量
+    rechargers = None  # 充电桩索引 向量
+
     def __init__(self, visit: list) -> None:
         self.visit = visit
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> Node:
         return self.visit[index]
 
     def __str__(self) -> str:
@@ -98,30 +103,127 @@ class Route:
     def copy(self):
         return Route(self.visit_list[:])
 
-    def distance(self):
-        return sum(map(lambda i: self.visit[i].distance_to(self.visit[i+1]), range(len(self.visit)-1)))
+    def sum_distance(self) -> float:
+        if self.adjacent_distance is None:
+            self.cal_adjacent_distance()
+        return np.sum(self.adjacent_distance)
 
-    def feasible(self, vehicle: Vehicle, ini_load_weigh: float):
-        if ini_load_weigh == None:
-            loaded_weight = vehicle.capacity
+    def find_charge_station(self) -> None:
+        visit = np.array(self.visit)
+        test_recharger = np.vectorize(lambda node: isinstance(node, Recharger))
+        self.rechargers = np.where(test_recharger(visit))[0]
+
+    def cal_adjacent_distance(self) -> None:
+        self.adjacent_distance = np.array(list(map(lambda i: self.visit[i].distance_to(self.visit[i+1]), range(len(self.visit)-1))))
+
+    def cal_load_weight(self, vehicle: Vehicle) -> None:
+        demand = np.array([cus.demand for cus in self.visit])
+        start_load_weight = np.sum(demand, where=demand > 0)
+        if start_load_weight > vehicle.capacity:
+            self.arrive_load_weight = np.array([start_load_weight])
+            return
+        demand_vary = np.cumsum(demand)
+        self.arrive_load_weight = start_load_weight-demand_vary
+
+    def cal_remain_battery(self, vehicle: Vehicle) -> None:
+        if self.adjacent_distance is None:
+            self.cal_adjacent_distance()
+        if self.rechargers is None:
+            self.find_charge_station()
+        if self.arrive_load_weight is None:
+            self.cal_load_weight(vehicle)
+        adjacent_consume_battery = np.zeros(len(self.visit))
+        adjacent_consume_battery[1:] = (self.arrive_load_weight[:-1]+vehicle.net_weight)*self.adjacent_distance*vehicle.battery_cost_speed
+        arrive_consume_battery = np.cumsum(adjacent_consume_battery)
+        self.arrive_remain_battery = vehicle.max_battery-arrive_consume_battery
+        for i in self.rechargers:
+            self.arrive_remain_battery[i+1:] += vehicle.max_battery
+
+    def cal_arrive_time(self, vehicle: Vehicle) -> None:
+        ready_time = np.array([node.ready_time for node in self.visit])
+        service_time = np.array([node.service_time for node in self.visit])
+        if self.rechargers is None:
+            self.find_charge_station()
+        if len(self.rechargers != 0):
+            self.cal_remain_battery(vehicle)
+            for i in self.rechargers:
+                service_time[i] += (vehicle.max_battery-self.arrive_remain_battery[i])/vehicle.charge_speed
+        arrive_service_time = np.cumsum(service_time)
+        arrive_before_service_time = np.zeros(len(self.visit))
+        arrive_before_service_time[1:] = arrive_service_time[:-1]
+        adjacent_consume_time = np.zeros(len(self.visit))
+        adjacent_consume_time[1:] = self.adjacent_distance/vehicle.velocity
+        arrive_consume_time = np.cumsum(adjacent_consume_time)
+        arrive_time = arrive_consume_time + arrive_before_service_time
+
+        done = 0
+        while True:
+            need_process = np.where(arrive_time < ready_time)[0]
+            if len(need_process) == done:
+                break
+            i = need_process[done]
+            arrive_time[i+1:] += ready_time[i]-arrive_time[i]
+            done += 1
+        # while True in (arrive_time < ready_time):
+        #    i = np.where(arrive_time < ready_time)[0][0]
+        #    arrive_time[i:] += ready_time[i]-arrive_time[i]
+        self.arrive_time = arrive_time
+
+    def feasible_weight(self, vehicle: Vehicle) -> bool:
+        if self.arrive_load_weight is None:
+            self.cal_load_weight(vehicle)
+        if True in (self.arrive_load_weight > vehicle.capacity):  # 这里不加括号会有错误，in的优先级高
+            return False
         else:
-            assert(ini_load_weigh <= vehicle.capacity)
-            loaded_weight = ini_load_weigh
+            return True
+
+    def feasible_battery(self, vehicle: Vehicle) -> bool:
+        if self.arrive_remain_battery is None:
+            self.cal_remain_battery(vehicle)
+        if True in (self.arrive_remain_battery < 0):
+            return False
+        else:
+            return True
+
+    def feasible_time(self, vehicle: Vehicle) -> bool:
+        if self.arrive_time is None:
+            self.cal_arrive_time(vehicle)
+        over_time = np.array([node.over_time for node in self.visit])
+        if True in (self.arrive_time > over_time):
+            return False
+        else:
+            return True
+
+    def feasible(self, vehicle: Vehicle) -> tuple:
+        if not self.feasible_weight(vehicle):
+            return False, 'capacity'
+        if not self.feasible_time(vehicle):
+            return False, 'time'
+        if not self.feasible_battery(vehicle):
+            return False, 'battery'
+        return True, ''
+
+    def feasible_old_non_vectorize(self, vehicle: Vehicle) -> tuple:
+        if self.arrive_load_weight is None:
+            self.cal_load_weight(vehicle)
+        loaded_weight = self.arrive_load_weight[0]
+        if loaded_weight < 0:
+            return False, (0, 'capacity', loaded_weight)
         remain_battery = vehicle.max_battery
         at_time = 0
         for loc_index, dest in enumerate(self.visit[1:]):
             next_loaded_weight = loaded_weight-dest.demand
-            if next_loaded_weight > vehicle.capacity or next_loaded_weight < 0:  # 检查容量限制
-                return False, loc_index, 'capacity', loaded_weight
+            if next_loaded_weight > vehicle.capacity:  # 检查容量限制
+                return False, (loc_index, 'capacity', loaded_weight)
 
             distance = self.visit[loc_index].distance_to(dest)
             next_remain_battery = remain_battery-(vehicle.battery_cost_speed*distance*(loaded_weight+vehicle.net_weight))
             if next_remain_battery < 0:  # 检查电池限制
-                return False, loc_index, 'battery', remain_battery
+                return False, (loc_index, 'battery', remain_battery)
 
             next_at_time = at_time+distance/vehicle.velocity
             if next_at_time > dest.over_time:  # 检查超时
-                return False, loc_index, 'time', at_time
+                return False, (loc_index, 'time', at_time)
             elif next_at_time < dest.ready_time:  # 提前到达情况
                 next_at_time = dest.ready_time
 
@@ -134,7 +236,7 @@ class Route:
             elif isinstance(dest, Recharger):
                 at_time += (vehicle.max_battery-remain_battery)/vehicle.charge_speed  # 充电时间
                 remain_battery = vehicle.max_battery
-        return True, loaded_weight, remain_battery, at_time
+        return True, (loaded_weight, remain_battery, at_time)
 
 
 class Model:
@@ -157,22 +259,17 @@ class Model:
         self.customers = customers
         self.rechargers = rechargers
 
-    def read_data(self):
+    def read_data(self) -> None:
         assert len(self.data_file) != 0
 
 
 class Solution:
     routes = []
-    ini_load_weight = []
 
-    def __init__(self, routes: list, ini_load_weight: list = None) -> None:
+    def __init__(self, routes: list) -> None:
         self.routes = routes
-        if ini_load_weight != None:
-            self.ini_load_weight = ini_load_weight
-        else:
-            self.ini_load_weight = [None]*len(self.routes)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> Route:
         return self.routes[index]
 
     def __str__(self) -> str:
@@ -184,14 +281,14 @@ class Solution:
     def copy(self):
         return Solution([route.copy() for route in self.routes])
 
-    def distance(self):
-        return sum(map(lambda route: route.distance(), self.routes))
+    def sum_distance(self) -> float:
+        return sum(map(lambda route: route.sum_distance(), self.routes))
 
-    def feasible(self, model: Model):
+    def feasible(self, model: Model) -> bool:
         if len(self.routes) > model.max_vehicle:
             return False
-        route_test_result = map(lambda route_load: route_load[0].feasible(model.vehicle, route_load[1]), zip(self.routes, self.ini_load_weight))
-        if False in map(lambda x: x[0], route_test_result):
+        route_test_result = map(lambda route: route.feasible(model.vehicle)[0], self.routes)
+        if False in route_test_result:
             return False
         else:
             return True
