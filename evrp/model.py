@@ -1,3 +1,5 @@
+from math import modf
+import random
 import numpy as np
 from abc import ABCMeta
 
@@ -16,7 +18,10 @@ class Node(metaclass=ABCMeta):
         self.x = x
         self.y = y
 
-    def distance_to(self, node) -> float:
+    def __repr__(self) -> str:
+        return '{} {} at {}'.format(type(self).__name__, self.id, id(self))
+
+    def distance_to(self, node: object) -> float:
         assert isinstance(node, Node)
         return ((self.x-node.x)**2+(self.y-node.y)**2)**0.5
 
@@ -29,20 +34,15 @@ class Depot(Node):
         self.over_time = over_time
         self.service_time = 0
 
-    def __repr__(self) -> str:
-        return 'Depot {} at {}'.format(self.id, id(self))
-
 
 class Customer(Node):
     def __init__(self, id: int, x: float, y: float, demand: float, ready_time: float, over_time: float, service_time: float) -> None:
         super().__init__(id, x, y)
+        assert(over_time >= ready_time)
         self.demand = demand
         self.ready_time = ready_time
         self.over_time = over_time
         self.service_time = service_time
-
-    def __repr__(self) -> str:
-        return 'Customer {} at {}'.format(self.id, id(self))
 
 
 class Recharger(Node):
@@ -52,9 +52,6 @@ class Recharger(Node):
         self.ready_time = 0
         self.over_time = over_time
         self.service_time = 0
-
-    def __repr__(self) -> str:
-        return 'Recharger {} at {}'.format(self.id, id(self))
 
 
 class Vehicle:
@@ -84,10 +81,8 @@ class Route:
     rechargers = None  # 充电桩索引 向量
 
     def __init__(self, visit: list) -> None:
+        assert(isinstance(visit[0], Depot) and isinstance(visit[-1], Depot))
         self.visit = visit
-
-    def __getitem__(self, index) -> Node:
-        return self.visit[index]
 
     def __str__(self) -> str:
         retstr = 'Route: D{}'.format(self.visit[0].id)
@@ -100,7 +95,13 @@ class Route:
                 retstr += ' -> R{}'.format(node.id)
         return retstr
 
-    def copy(self):
+    def __getitem__(self, index: int) -> Node:
+        return self.visit[index]
+
+    def __eq__(self, other: object) -> bool:
+        return self.visit == other.visit
+
+    def copy(self) -> object:
         return Route(self.visit_list[:])
 
     def sum_distance(self) -> float:
@@ -140,6 +141,8 @@ class Route:
             self.arrive_remain_battery[i+1:] += vehicle.max_battery
 
     def cal_arrive_time(self, vehicle: Vehicle) -> None:
+        if self.adjacent_distance is None:
+            self.cal_adjacent_distance()
         ready_time = np.array([node.ready_time for node in self.visit])
         service_time = np.array([node.service_time for node in self.visit])
         if self.rechargers is None:
@@ -203,11 +206,11 @@ class Route:
             return False, 'battery'
         return True, ''
 
-    def feasible_old_non_vectorize(self, vehicle: Vehicle) -> tuple:
+    def abandoned_feasible(self, vehicle: Vehicle) -> tuple:
         if self.arrive_load_weight is None:
             self.cal_load_weight(vehicle)
         loaded_weight = self.arrive_load_weight[0]
-        if loaded_weight < 0:
+        if loaded_weight > vehicle.capacity:
             return False, (0, 'capacity', loaded_weight)
         remain_battery = vehicle.max_battery
         at_time = 0
@@ -261,6 +264,37 @@ class Model:
 
     def read_data(self) -> None:
         assert len(self.data_file) != 0
+        with open(self.data_file) as f:
+            meet_empty_line = False
+            for line in f.readlines()[1:]:
+                if line == '\n':
+                    meet_empty_line = True
+                    continue
+                if not meet_empty_line:
+                    if line[0] in 'DSC':
+                        name, type_, x, y, demand, ready_time, over_time, service_time = line.split()
+                        if type_ == 'd':
+                            self.depot = Depot(int(name[1:]), float(x), float(y), float(over_time))
+                        elif type_ == 'f':
+                            self.rechargers.append(Recharger(int(name[1:]), float(x), float(y), float(over_time)))
+                        elif type_ == 'c':
+                            self.customers.append(Customer(int(name[1:]), float(x), float(y), float(demand), float(ready_time), float(over_time), float(service_time)))
+                    else:
+                        assert('wrong file')
+                else:
+                    end_num = float(line[line.find('/')+1:-2])
+                    if line[0] == 'Q':
+                        self.vehicle.max_battery = end_num
+                    elif line[0] == 'C':
+                        self.vehicle.capacity = end_num
+                    elif line[0] == 'r':
+                        self.vehicle.battery_cost_speed = end_num
+                    elif line[0] == 'g':
+                        self.vehicle.charge_speed = end_num
+                    elif line[0] == 'v':
+                        self.vehicle.velocity = end_num
+                    else:
+                        assert('wrong file')
 
 
 class Solution:
@@ -269,17 +303,29 @@ class Solution:
     def __init__(self, routes: list) -> None:
         self.routes = routes
 
-    def __getitem__(self, index) -> Route:
-        return self.routes[index]
-
     def __str__(self) -> str:
         retstr = 'Solution: {} route{}'.format(len(self.routes), 's' if len(self.routes) != 1 else '')
         for route in self.routes:
             retstr += '\n'+' '*4+str(route)
         return retstr
 
-    def copy(self):
+    def __getitem__(self, index: int) -> Route:
+        return self.routes[index]
+
+    def __eq__(self, other: object) -> bool:
+        if len(self.routes) != len(other.routes):
+            return False
+        self.arrange()
+        for a, b in zip(self.routes, other.routes):
+            if a != b:
+                return False
+        return True
+
+    def copy(self) -> object:
         return Solution([route.copy() for route in self.routes])
+
+    def arrange(self) -> None:
+        self.routes.sort(key=lambda route: (route.visit[1].id, route.visit[1].x, route.visit[1].y))
 
     def sum_distance(self) -> float:
         return sum(map(lambda route: route.sum_distance(), self.routes))
@@ -292,3 +338,38 @@ class Solution:
             return False
         else:
             return True
+
+
+class Evolution:
+    model = None
+    size = 0
+
+    def __init__(self, model: Model, size: int) -> None:
+        self.model = model
+        self.size = size
+
+    def random_create(self) -> Solution:
+        choose = self.model.customers[:]
+        random.shuffle(choose)
+        routes = []
+        building_route_visit = [self.model.depot]
+        i = 0
+        while i < len(choose):
+            try_route = Route(building_route_visit+[choose[i], self.model.depot])
+            if try_route.feasible_weight(self.model.vehicle) and try_route.feasible_time(self.model.vehicle):
+                if i == len(choose)-1:
+                    routes.append(try_route)
+                    break
+                building_route_visit.append(choose[i])
+                i += 1
+            else:
+                building_route_visit.append(self.model.depot)
+                routes.append(Route(building_route_visit))
+                building_route_visit = [self.model.depot]
+        return Solution(routes)
+
+    def initialization(self) -> list:
+        population = []
+        for _ in range(self.size):
+            population.append(self.random_create())
+        return population
