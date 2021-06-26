@@ -1,7 +1,10 @@
 from math import modf
 import random
+import re
 import numpy as np
 from abc import ABCMeta
+
+from . import util
 
 
 class Node(metaclass=ABCMeta):
@@ -126,7 +129,19 @@ class Route:
         demand_vary = np.cumsum(demand)
         self.arrive_load_weight = start_load_weight-demand_vary
 
-    def cal_remain_battery(self, vehicle: Vehicle) -> None:
+    def cal_remain_battery_without_consider_weight(self, vehicle: Vehicle) -> None:
+        if self.adjacent_distance is None:
+            self.cal_adjacent_distance()
+        if self.rechargers is None:
+            self.find_charge_station()
+        adjacent_consume_battery = np.zeros(len(self.visit))
+        adjacent_consume_battery[1:] = self.adjacent_distance*vehicle.battery_cost_speed
+        arrive_consume_battery = np.cumsum(adjacent_consume_battery)
+        self.arrive_remain_battery = vehicle.max_battery-arrive_consume_battery
+        for i in self.rechargers:
+            self.arrive_remain_battery[i+1:] += vehicle.max_battery-self.arrive_remain_battery[i]
+
+    def cal_remain_battery_consider_weight(self, vehicle: Vehicle) -> None:
         if self.adjacent_distance is None:
             self.cal_adjacent_distance()
         if self.rechargers is None:
@@ -138,7 +153,9 @@ class Route:
         arrive_consume_battery = np.cumsum(adjacent_consume_battery)
         self.arrive_remain_battery = vehicle.max_battery-arrive_consume_battery
         for i in self.rechargers:
-            self.arrive_remain_battery[i+1:] += vehicle.max_battery
+            self.arrive_remain_battery[i+1:] += vehicle.max_battery-self.arrive_remain_battery[i]
+
+    cal_remain_battery = cal_remain_battery_without_consider_weight
 
     def cal_arrive_time(self, vehicle: Vehicle) -> None:
         if self.adjacent_distance is None:
@@ -241,6 +258,33 @@ class Route:
                 remain_battery = vehicle.max_battery
         return True, (loaded_weight, remain_battery, at_time)
 
+    def penalty_capacity(self, vehicle: Vehicle) -> float:
+        if self.arrive_load_weight is None:
+            self.cal_load_weight(vehicle)
+        penalty = max(self.arrive_load_weight[0]-vehicle.capacity, 0)
+        neg_demand_cus = []
+        for i, cus in enumerate(self.visit):
+            if cus.demand < 0:
+                neg_demand_cus.append(i)
+        for i in neg_demand_cus:
+            penalty += max(self.arrive_load_weight[i]-vehicle.capacity, 0)
+        return penalty
+
+    def penalty_time(self, vehicle: Vehicle) -> float:
+        if self.arrive_time is None:
+            self.cal_arrive_time(vehicle)
+        late_time = self.arrive_time-np.array([cus.over_time for cus in self.visit])
+        if_late = np.where(late_time > 0)[0]
+        if len(if_late) > 0:
+            return late_time[if_late[0]]
+        else:
+            return 0.0
+
+    def penalty_battery(self, vehicle: Vehicle) -> float:
+        if self.arrive_remain_battery is None:
+            self.cal_remain_battery(vehicle)
+        return np.abs(np.sum(self.arrive_remain_battery, where=self.arrive_remain_battery < 0))
+
 
 class Model:
     data_file = ''
@@ -296,6 +340,25 @@ class Model:
                     else:
                         assert('wrong file')
 
+    def get_map_bound(self):
+        cus_x = [cus.x for cus in self.customers]
+        cus_y = [cus.y for cus in self.customers]
+        cus_min_x = min(cus_x)
+        cus_max_x = max(cus_x)
+        cus_min_y = min(cus_y)
+        cus_max_y = max(cus_y)
+        rec_x = [rec.x for rec in self.rechargers]
+        rec_y = [rec.y for rec in self.rechargers]
+        rec_min_x = min(rec_x)
+        rec_max_x = max(rec_x)
+        rec_min_y = min(rec_y)
+        rec_max_y = max(rec_y)
+        min_x = min(cus_min_x, rec_min_x, self.depot.x)
+        max_x = max(cus_max_x, rec_max_x, self.depot.x)
+        min_y = min(cus_min_y, rec_min_y, self.depot.y)
+        max_y = max(cus_max_y, rec_max_y, self.depot.y)
+        return min_x, max_x, min_y, max_y
+
 
 class Solution:
     routes = []
@@ -344,28 +407,62 @@ class Evolution:
     model = None
     size = 0
 
-    def __init__(self, model: Model, size: int) -> None:
+    def __init__(self, model: Model, size: int = 100) -> None:
         self.model = model
         self.size = size
 
     def random_create(self) -> Solution:
+        x = random.uniform(self.model.get_map_bound()[0], self.model.get_map_bound()[1])
+        y = random.uniform(self.model.get_map_bound()[2], self.model.get_map_bound()[3])
         choose = self.model.customers[:]
-        random.shuffle(choose)
+        choose.sort(key=lambda cus: util.cal_angle_AoB((self.model.depot.x, self.model.depot.y), (x, y), (cus.x, cus.y)))
         routes = []
-        building_route_visit = [self.model.depot]
-        i = 0
-        while i < len(choose):
-            try_route = Route(building_route_visit+[choose[i], self.model.depot])
-            if try_route.feasible_weight(self.model.vehicle) and try_route.feasible_time(self.model.vehicle):
-                if i == len(choose)-1:
-                    routes.append(try_route)
+        building_route_visit = [self.model.depot, self.model.depot]
+
+        choose_index = 0
+        while choose_index < len(choose):
+            allow_insert_place = list(range(1, len(building_route_visit)))
+
+            while True:
+                min_increase_dis = float('inf')
+                decide_insert_place = None
+                for insert_place in allow_insert_place:
+                    increase_dis = choose[choose_index].distance_to(building_route_visit[insert_place-1])+choose[choose_index].distance_to(building_route_visit[insert_place])-building_route_visit[insert_place-1].distance_to(building_route_visit[insert_place])
+                    if increase_dis < min_increase_dis:
+                        decide_insert_place = insert_place
+                if len(allow_insert_place) == 1:
                     break
-                building_route_visit.append(choose[i])
-                i += 1
+                elif (isinstance(building_route_visit[decide_insert_place-1], Customer) and isinstance(building_route_visit[decide_insert_place], Customer)) and (building_route_visit[decide_insert_place-1].ready_time <= choose[choose_index].ready_time and choose[choose_index].ready_time <= building_route_visit[decide_insert_place].ready_time):
+                    break
+                elif (isinstance(building_route_visit[decide_insert_place-1], Customer) and not isinstance(building_route_visit[decide_insert_place], Customer)) and building_route_visit[decide_insert_place-1].ready_time <= choose[choose_index].ready_time:
+                    break
+                elif (not isinstance(building_route_visit[decide_insert_place-1], Customer) and isinstance(building_route_visit[decide_insert_place], Customer)) and choose[choose_index].ready_time <= building_route_visit[decide_insert_place]:
+                    break
+                elif not isinstance(building_route_visit[decide_insert_place-1], Customer) and not isinstance(building_route_visit[decide_insert_place], Customer):
+                    break
+                else:
+                    allow_insert_place.remove(decide_insert_place)
+                    continue
+
+            building_route_visit.insert(decide_insert_place, choose[choose_index])
+
+            try_route = Route(building_route_visit)
+            if try_route.feasible_weight(self.model.vehicle) and try_route.feasible_battery(self.model.vehicle):
+                del choose[choose_index]
             else:
-                building_route_visit.append(self.model.depot)
-                routes.append(Route(building_route_visit))
-                building_route_visit = [self.model.depot]
+                if len(routes) < self.model.max_vehicle-1:
+                    del building_route_visit[decide_insert_place]
+                    if len(building_route_visit) == 2:
+                        choose_index += 1
+                    else:
+                        routes.append(Route(building_route_visit))
+                        building_route_visit = [self.model.depot, self.model.depot]
+                elif len(routes) == self.model.max_vehicle-1:
+                    del choose[choose_index]
+
+        #assert len(building_route_visit) > 2
+        routes.append(Route(building_route_visit[:-1]+choose+[self.model.depot]))
+
         return Solution(routes)
 
     def initialization(self) -> list:
