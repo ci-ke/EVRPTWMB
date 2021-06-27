@@ -1,6 +1,4 @@
-from math import modf
 import random
-import re
 import numpy as np
 from abc import ABCMeta
 
@@ -8,6 +6,7 @@ from . import util
 
 
 class Node(metaclass=ABCMeta):
+    # 构造属性
     id = 0
     x = 0.0
     y = 0.0
@@ -65,7 +64,7 @@ class Vehicle:
     battery_cost_speed = 0.0
     charge_speed = 0.0
 
-    def __init__(self, capacity: float, max_battery: float, net_weight: float, velocity: float, battery_cost_speed: float, charge_speed: float) -> None:
+    def __init__(self, capacity: float = 0, max_battery: float = 0, net_weight: float = 0, velocity: float = 0, battery_cost_speed: float = 0, charge_speed: float = 0) -> None:
         self.capacity = capacity
         self.max_battery = max_battery
         self.net_weight = net_weight
@@ -75,8 +74,9 @@ class Vehicle:
 
 
 class Route:
+    # 构造属性
     visit = []
-
+    # 计算属性
     arrive_load_weight = None  # 到达并服务后载货量 向量
     arrive_remain_battery = None  # 刚到达时剩余电量 向量
     arrive_time = None  # 刚到达时的时刻 向量
@@ -105,7 +105,7 @@ class Route:
         return self.visit == other.visit
 
     def copy(self) -> object:
-        return Route(self.visit_list[:])
+        return Route(self.visit[:])
 
     def sum_distance(self) -> float:
         if self.adjacent_distance is None:
@@ -285,26 +285,42 @@ class Route:
             self.cal_remain_battery(vehicle)
         return np.abs(np.sum(self.arrive_remain_battery, where=self.arrive_remain_battery < 0))
 
+    def get_objective(self, vehicle: Vehicle, alpha: float, beta: float, gamma: float) -> float:
+        return self.sum_distance()+alpha*self.penalty_capacity(vehicle)+beta*self.penalty_time(vehicle)+gamma*self.penalty_battery(vehicle)
+
+    def clear_status(self) -> None:
+        self.arrive_load_weight = None
+        self.arrive_remain_battery = None
+        self.arrive_time = None
+        self.adjacent_distance = None
+        self.rechargers = None
+
+    def random_segment_range(self, max: int) -> tuple:
+        actual_max = min(len(self.visit)-2, max)
+        length = random.randint(0, actual_max)
+        start_point = random.choice(range(1, len(self.visit)-length))
+        end_point = start_point+length
+        return (start_point, end_point)
+
 
 class Model:
+    # 构造属性
     data_file = ''
     file_type = ''
 
-    vehicle = None
+    vehicle = Vehicle()
     max_vehicle = 0
-
+    # 计算属性
     depot = None
     customers = []
     rechargers = []
 
-    def __init__(self, data_file: str = '', file_type: str = '', capacity: float = 0, max_battery: float = 0, net_weight: float = 0, velocity: float = 0, battery_cost_speed: float = 0, charge_speed: float = 0, max_vehicle: int = 0, depot: Depot = None, customers: list = [], rechargers: list = []) -> None:
+    def __init__(self, data_file: str = '', file_type: str = '', **para) -> None:
         self.data_file = data_file
         self.file_type = file_type
-        self.vehicle = Vehicle(capacity, max_battery, net_weight, velocity, battery_cost_speed, charge_speed)
-        self.max_vehicle = max_vehicle
-        self.depot = depot
-        self.customers = customers
-        self.rechargers = rechargers
+        for key, value in para.items():
+            assert(hasattr(self, key))
+            setattr(self, key, value)
 
     def read_data(self) -> None:
         assert len(self.data_file) != 0
@@ -340,7 +356,7 @@ class Model:
                     else:
                         assert('wrong file')
 
-    def get_map_bound(self):
+    def get_map_bound(self) -> tuple:
         cus_x = [cus.x for cus in self.customers]
         cus_y = [cus.y for cus in self.customers]
         cus_min_x = min(cus_x)
@@ -361,6 +377,7 @@ class Model:
 
 
 class Solution:
+    # 构造属性
     routes = []
 
     def __init__(self, routes: list) -> None:
@@ -402,14 +419,63 @@ class Solution:
         else:
             return True
 
+    def get_objective(self, model: Model, penalty: tuple) -> float:
+        ret = 0
+        for route in self.routes:
+            ret += route.get_objective(model.vehicle, penalty[0], penalty[1], penalty[2])
+        return ret
+
+    def clear_status(self) -> None:
+        for route in self.routes:
+            route.clear_status()
+
+    def cyclic_exchange(self, Rts: int, max: int) -> object:
+        if len(self.routes) <= Rts:
+            sel = list(range(len(self.routes)))
+        else:
+            sel = random.sample(range(len(self.routes)), Rts)
+        actual_select = [None]*len(self.routes)
+        for route_i in sel:
+            actual_select[route_i] = self.routes[route_i].random_segment_range(max)
+        backup_sol = self.copy()
+        for sel_i in range(len(sel)):
+            backup_sol.routes[sel[sel_i]].visit[actual_select[sel[sel_i]][0]:actual_select[sel[sel_i]][1]] = self.routes[sel[(sel_i+1) % len(sel)]].visit[actual_select[sel[(sel_i+1) % len(sel)]][0]:actual_select[sel[(sel_i+1) % len(sel)]][1]]
+
+        for route in backup_sol.routes:
+            if len(route.visit) == 2:
+                backup_sol.routes.remove(route)
+
+        return backup_sol
+
 
 class Evolution:
+    # 构造属性
     model = None
-    size = 0
 
-    def __init__(self, model: Model, size: int = 100) -> None:
+    vns_neighbour_Rts = 0
+    vns_neighbour_max = 0
+    eta_feas = 0
+    eta_dist = 0
+    Delta_SA = 0.0
+
+    penalty_0 = tuple()
+    penalty_min = tuple()
+    penalty_max = tuple()
+    delta = 0.0
+    eta_penalty = 0
+
+    nu_min = 0
+    nu_max = 0
+    lambda_div = 0.0
+    eta_tabu = 0
+    # 计算属性
+    vns_neighbour = []
+
+    def __init__(self, model: Model, **param) -> None:
         self.model = model
-        self.size = size
+        for key, value in param.items():
+            assert(hasattr(self, key))
+            setattr(self, key, value)
 
     def random_create(self) -> Solution:
         x = random.uniform(self.model.get_map_bound()[0], self.model.get_map_bound()[1])
@@ -460,7 +526,6 @@ class Evolution:
                 elif len(routes) == self.model.max_vehicle-1:
                     del choose[choose_index]
 
-        #assert len(building_route_visit) > 2
         routes.append(Route(building_route_visit[:-1]+choose+[self.model.depot]))
 
         return Solution(routes)
@@ -470,3 +535,35 @@ class Evolution:
         for _ in range(self.size):
             population.append(self.random_create())
         return population
+
+    def create_vns_neighbour(self, Rts: int, max: int) -> list:
+        assert Rts >= 2 and max >= 1
+        self.vns_neighbour = []
+        for R in range(2, Rts+1):
+            for m in range(1, max+1):
+                self.vns_neighbour.append((R, m))
+
+    def tabu_search(self, S: Solution, eta_tabu: int) -> Solution:
+        _ = eta_tabu
+        return S
+
+    def VNS_TS(self) -> Solution:
+        self.create_vns_neighbour(self.vns_neighbour_Rts, self.vns_neighbour_max)
+        S = self.random_create()
+        k = 0
+        i = 0
+        feasibilityPhase = False
+        SA = util.SA(self.Delta_SA, self.eta_dist)
+        while feasibilityPhase or i < self.eta_dist:
+            S1 = S.cyclic_exchange(*self.vns_neighbour[k])
+            S2 = self.tabu_search(S1, 0)
+            if random.random() < SA.probability(S2, S, i, self.model, self.penalty_0):
+                S = S2
+                #print(S)
+                k = 0
+            else:
+                k = (k+1) % len(self.vns_neighbour)
+            if feasibilityPhase:
+                pass
+            i += 1
+        return S
