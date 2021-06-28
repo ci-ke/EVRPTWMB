@@ -1,3 +1,4 @@
+import random
 import numpy as np
 
 
@@ -21,3 +22,11 @@ class SA:
 
     def probability(self, S_new: float, S: float, iter: int) -> float:
         return np.exp(-(S_new-S)/(self.T0-self.delta_T*iter))
+
+
+def wheel_select(elements: np.array) -> int:
+    sum_elements = np.cumsum(elements)
+    select = random.uniform(0, sum_elements[-1])
+    sum_elements -= select
+    choose = np.where(sum_elements > 0)[0][0]
+    return choose

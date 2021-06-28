@@ -2,8 +2,6 @@ import random
 import numpy as np
 from abc import ABCMeta
 
-from . import util
-
 
 class Node(metaclass=ABCMeta):
     # 构造属性
@@ -100,6 +98,9 @@ class Route:
 
     def __getitem__(self, index: int) -> Node:
         return self.visit[index]
+
+    def __len__(self) -> int:
+        return len(self.visit)
 
     def __eq__(self, other: object) -> bool:
         return self.visit == other.visit
@@ -298,9 +299,16 @@ class Route:
     def random_segment_range(self, max: int) -> tuple:
         actual_max = min(len(self.visit)-2, max)
         length = random.randint(0, actual_max)
-        start_point = random.choice(range(1, len(self.visit)-length))
+        start_point = random.randint(1, len(self.visit)-1-length)  # random.choice(range(1, len(self.visit)-length))
         end_point = start_point+length
         return (start_point, end_point)
+
+    def avg_distance(self) -> float:
+        cus_num = 0
+        for cus in self.visit:
+            if isinstance(cus, Customer):
+                cus_num += 1
+        return self.sum_distance()/cus_num
 
 
 class Model:
@@ -392,6 +400,9 @@ class Solution:
     def __getitem__(self, index: int) -> Route:
         return self.routes[index]
 
+    def __len__(self) -> int:
+        return len(self.routes)
+
     def __eq__(self, other: object) -> bool:
         if len(self.routes) != len(other.routes):
             return False
@@ -429,222 +440,6 @@ class Solution:
         for route in self.routes:
             route.clear_status()
 
-    def cyclic_exchange(self, Rts: int, max: int) -> object:
-        if len(self.routes) <= Rts:
-            sel = list(range(len(self.routes)))
-        else:
-            sel = random.sample(range(len(self.routes)), Rts)
-        actual_select = [None]*len(self.routes)
-        for route_i in sel:
-            actual_select[route_i] = self.routes[route_i].random_segment_range(max)
-        ret_sol = self.copy()
-        for sel_i in range(len(sel)):
-            ret_sol.routes[sel[sel_i]].visit[actual_select[sel[sel_i]][0]:actual_select[sel[sel_i]][1]] = self.routes[sel[(sel_i+1) % len(sel)]].visit[actual_select[sel[(sel_i+1) % len(sel)]][0]:actual_select[sel[(sel_i+1) % len(sel)]][1]]
-
-        for route in ret_sol.routes:
-            if len(route.visit) == 2:
-                ret_sol.routes.remove(route)
-
-        return ret_sol
-
-    def two_opt(self, first_which: int, first_where: int, second_which: int, second_where: int) -> object:
-        assert first_where >= 0 and first_where <= len(self.routes[first_which].visit)-2
-        assert second_where >= 0 and second_where <= len(self.routes[second_which].visit)-2
-        ret_sol = self.copy()
-        ret_sol.routes[first_which].visit[first_where+1:] = self.routes[second_which].visit[second_where+1:]
-        ret_sol.routes[second_which].visit[second_where+1:] = self.routes[first_which].visit[first_where+1:]
-
-        if len(ret_sol.routes[first_which].visit) == 2:
-            del ret_sol.routes[first_which]
-        elif len(ret_sol.routes[second_which].visit) == 2:
-            del ret_sol.routes[second_which]
-
-        return ret_sol
-
-    def relocate(self, which: int, where: int) -> object:
-        assert where >= 1 and where <= len(self.routes[which].visit)-2
-        if len(self.routes[which].visit) > 3:
-            new_which = random.choice(range(len(self.routes)))
-        else:
-            choose = list(range(len(self.routes)))
-            choose.remove(which)
-            new_which = random.choice(choose)
-        ret_sol = self.copy()
-        if new_which != which:
-            new_where = random.choice(range(1, len(self.routes[new_which].visit)))
-            ret_sol[new_which].visit.insert(new_where, self.routes[which].visit[where])
-            del ret_sol.routes[which].visit[where]
-            if len(ret_sol.routes[which].visit) == 2:
-                del ret_sol.routes[which]
-        else:
-            choose = list(range(1, len(self.routes[new_which].visit)))
-            choose.remove(where)
-            choose.remove(where+1)
-            new_where = random.choice(choose)
-            ret_sol[which].visit.insert(new_where, self.routes[which].visit[where])
-            if new_where > where:
-                del ret_sol.routes[which].visit[where]
-            else:
-                del ret_sol.routes[which].visit[where+1]
-        return ret_sol
-
-    def exchange(self) -> object:
-        ret_sol = self.copy()
-        while True:
-            which1 = random.choice(range(len(self.routes)))
-            which2 = random.choice(range(len(self.routes)))
-            while which1 == which2:
-                if len(self.routes[which1].visit) <= 3:
-                    which1 = random.choice(range(len(self.routes)))
-                    which2 = random.choice(range(len(self.routes)))
-                else:
-                    break
-            if which1 == which2:
-                where1, where2 = random.sample(range(1, len(self.routes[which1].visit)-1), 2)
-                if isinstance(self.routes[which1].visit[where1], Recharger) or isinstance(self.routes[which2].visit[where2], Recharger):
-                    continue
-                ret_sol.routes[which1].visit[where1] = self.routes[which2].visit[where2]
-                ret_sol.routes[which2].visit[where2] = self.routes[which1].visit[where1]
-            else:
-                where1 = random.choice(list(range(1, len(self.routes[which1].visit)-1)))
-                where2 = random.choice(list(range(1, len(self.routes[which2].visit)-1)))
-                if isinstance(self.routes[which1].visit[where1], Recharger) or isinstance(self.routes[which2].visit[where2], Recharger):
-                    continue
-                ret_sol.routes[which1].visit[where1] = self.routes[which2].visit[where2]
-                ret_sol.routes[which2].visit[where2] = self.routes[which1].visit[where1]
-            break
-        return ret_sol
-
-    def stationInRe(self) -> object:
-        pass
-
     def addVehicle(self, model: Model) -> None:
         if len(self.routes) < model.max_vehicle:
             self.routes.append(Route([self.routes[0].visit[0], self.routes[0].visit[0]]))
-
-
-class Evolution:
-    # 构造属性
-    model = None
-
-    vns_neighbour_Rts = 0
-    vns_neighbour_max = 0
-    eta_feas = 0
-    eta_dist = 0
-    Delta_SA = 0.0
-
-    penalty_0 = tuple()
-    penalty_min = tuple()
-    penalty_max = tuple()
-    delta = 0.0
-    eta_penalty = 0
-
-    nu_min = 0
-    nu_max = 0
-    lambda_div = 0.0
-    eta_tabu = 0
-    # 计算属性
-    vns_neighbour = []
-
-    def __init__(self, model: Model, **param) -> None:
-        self.model = model
-        for key, value in param.items():
-            assert(hasattr(self, key))
-            setattr(self, key, value)
-
-    def random_create(self) -> Solution:
-        x = random.uniform(self.model.get_map_bound()[0], self.model.get_map_bound()[1])
-        y = random.uniform(self.model.get_map_bound()[2], self.model.get_map_bound()[3])
-        choose = self.model.customers[:]
-        choose.sort(key=lambda cus: util.cal_angle_AoB((self.model.depot.x, self.model.depot.y), (x, y), (cus.x, cus.y)))
-        routes = []
-        building_route_visit = [self.model.depot, self.model.depot]
-
-        choose_index = 0
-        while choose_index < len(choose):
-            allow_insert_place = list(range(1, len(building_route_visit)))
-
-            while True:
-                min_increase_dis = float('inf')
-                decide_insert_place = None
-                for insert_place in allow_insert_place:
-                    increase_dis = choose[choose_index].distance_to(building_route_visit[insert_place-1])+choose[choose_index].distance_to(building_route_visit[insert_place])-building_route_visit[insert_place-1].distance_to(building_route_visit[insert_place])
-                    if increase_dis < min_increase_dis:
-                        decide_insert_place = insert_place
-                if len(allow_insert_place) == 1:
-                    break
-                elif (isinstance(building_route_visit[decide_insert_place-1], Customer) and isinstance(building_route_visit[decide_insert_place], Customer)) and (building_route_visit[decide_insert_place-1].ready_time <= choose[choose_index].ready_time and choose[choose_index].ready_time <= building_route_visit[decide_insert_place].ready_time):
-                    break
-                elif (isinstance(building_route_visit[decide_insert_place-1], Customer) and not isinstance(building_route_visit[decide_insert_place], Customer)) and building_route_visit[decide_insert_place-1].ready_time <= choose[choose_index].ready_time:
-                    break
-                elif (not isinstance(building_route_visit[decide_insert_place-1], Customer) and isinstance(building_route_visit[decide_insert_place], Customer)) and choose[choose_index].ready_time <= building_route_visit[decide_insert_place]:
-                    break
-                elif not isinstance(building_route_visit[decide_insert_place-1], Customer) and not isinstance(building_route_visit[decide_insert_place], Customer):
-                    break
-                else:
-                    allow_insert_place.remove(decide_insert_place)
-                    continue
-
-            building_route_visit.insert(decide_insert_place, choose[choose_index])
-
-            try_route = Route(building_route_visit)
-            if try_route.feasible_weight(self.model.vehicle) and try_route.feasible_battery(self.model.vehicle):
-                del choose[choose_index]
-            else:
-                if len(routes) < self.model.max_vehicle-1:
-                    del building_route_visit[decide_insert_place]
-                    if len(building_route_visit) == 2:
-                        choose_index += 1
-                    else:
-                        routes.append(Route(building_route_visit))
-                        building_route_visit = [self.model.depot, self.model.depot]
-                elif len(routes) == self.model.max_vehicle-1:
-                    del choose[choose_index]
-
-        routes.append(Route(building_route_visit[:-1]+choose+[self.model.depot]))
-
-        return Solution(routes)
-
-    def initialization(self) -> list:
-        population = []
-        for _ in range(self.size):
-            population.append(self.random_create())
-        return population
-
-    def create_vns_neighbour(self, Rts: int, max: int) -> list:
-        assert Rts >= 2 and max >= 1
-        self.vns_neighbour = []
-        for R in range(2, Rts+1):
-            for m in range(1, max+1):
-                self.vns_neighbour.append((R, m))
-
-    def tabu_search(self, S: Solution, eta_tabu: int) -> Solution:
-        return S
-
-    def VNS_TS(self) -> Solution:
-        self.create_vns_neighbour(self.vns_neighbour_Rts, self.vns_neighbour_max)
-        S = self.random_create()
-        k = 0
-        i = 0
-        feasibilityPhase = True
-        acceptSA = util.SA(self.Delta_SA, self.eta_dist)
-        while feasibilityPhase or i < self.eta_dist:
-            S1 = S.cyclic_exchange(*self.vns_neighbour[k])
-            S2 = self.tabu_search(S1, self.eta_tabu)
-            if random.random() < acceptSA.probability(S2.get_objective(self.model, self.penalty_0), S.get_objective(self.model, self.penalty_0), i):
-                S = S2
-                #print(i, S)
-                # print(S.feasible(self.model),S.sum_distance())
-                k = 0
-            else:
-                k = (k+1) % len(self.vns_neighbour)
-            if feasibilityPhase:
-                if not S.feasible(self.model):
-                    if i == self.eta_feas:
-                        S.addVehicle(self.model)
-                        i -= 1
-                else:
-                    feasibilityPhase = False
-                    i -= 1
-            i += 1
-        return S
