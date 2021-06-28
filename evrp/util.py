@@ -30,3 +30,32 @@ def wheel_select(elements: np.array) -> int:
     sum_elements -= select
     choose = np.where(sum_elements > 0)[0][0]
     return choose
+
+
+def dominate(a: list, b: list) -> bool:
+    have_small = False
+    for x, y in zip(a, b):
+        if not have_small and x < y:
+            have_small = True
+        if x > y:
+            return False
+    if have_small:
+        return True
+    else:
+        return False
+
+
+def binary_tournament(length: int) -> list:
+    '''
+    length代表参加竞争的人数，在列表中的索引代表排名\n
+    返回获胜者的索引
+    '''
+    pk = list(range(length))
+    random.shuffle(pk)
+    pk_win = []
+    for i in range(0, length-1, 2):
+        if pk[i] < pk[i+1]:
+            pk_win.append(pk[i])
+        else:
+            pk_win.append(pk[i+1])
+    return pk_win

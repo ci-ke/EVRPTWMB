@@ -1,3 +1,4 @@
+from operator import mod
 from .model import *
 from . import util
 
@@ -97,9 +98,28 @@ class Operation:
     def stationInRe(solution: Solution) -> Solution:
         pass
 
+    def choose_best_insert(solution: Solution, node: Node, route_indexes: list) -> tuple:
+        min_increase_dis_to_route = float('inf')
+        to_route = None
+        insert_place_to_route = None
+        for route_index in route_indexes:
+            min_increase_dis = float('inf')
+            insert_place = None
+            for place in range(1, len(solution.routes[route_index])):
+                increase_dis = node.distance_to(solution.routes[route_index].visit[place-1])+node.distance_to(solution.routes[route_index].visit[place])-solution.routes[route_index].visit[place-1].distance_to(solution.routes[route_index].visit[place])
+                if increase_dis < min_increase_dis:
+                    min_increase_dis = increase_dis
+                    insert_place = place
+            if min_increase_dis < min_increase_dis_to_route:
+                min_increase_dis_to_route = min_increase_dis
+                to_route = route_index
+                insert_place_to_route = insert_place
+        return to_route, insert_place_to_route
+
     @staticmethod
-    def ACO_GM_cross1(solution: Solution) -> None:
+    def ACO_GM_cross1(solution: Solution) -> Solution:
         if len(solution.routes) > 1:
+            solution = solution.copy()
             avg_dis = np.zeros(len(solution.routes), dtype=float)
             for i, route in enumerate(solution.routes):
                 avg_dis[i] = route.avg_distance()
@@ -107,41 +127,46 @@ class Operation:
             select = util.wheel_select(avg_dis)
             rest_routes_index = list(range(len(solution.routes)))
             rest_routes_index.remove(select)
-            for cus in solution.routes[select].visit[1:-1]:
-                min_increase_dis_to_route = float('inf')
-                to_route = None
-                insert_place_to_route = None
-                for route_index in rest_routes_index:
-                    min_increase_dis = float('inf')
-                    insert_place = None
-                    for place in range(1, len(solution.routes[route_index])):
-                        increase_dis = cus.distance_to(solution.routes[route_index].visit[place-1])+cus.distance_to(solution.routes[route_index].visit[place])-solution.routes[route_index].visit[place-1].distance_to(solution.routes[route_index].visit[place])
-                        if increase_dis < min_increase_dis:
-                            min_increase_dis = increase_dis
-                            insert_place = place
-                    if min_increase_dis < min_increase_dis_to_route:
-                        min_increase_dis_to_route = min_increase_dis
-                        to_route = route_index
-                        insert_place_to_route = insert_place
-                solution.routes[to_route].visit.insert(insert_place_to_route, cus)
+            for node in solution.routes[select].visit[1:-1]:
+                to_route, insert_place_to_route = Operation.choose_best_insert(solution, node, rest_routes_index)
+                solution.routes[to_route].visit.insert(insert_place_to_route, node)
             del solution.routes[select]
+        return solution
 
     @staticmethod
-    def ACO_GM_cross2(solution: Solution) -> None:
-        pass
+    def ACO_GM_cross2(solution1: Solution, solution2: Solution) -> Solution:
+        solution1 = solution1.copy()
+        min_dis = float('inf')
+        min_route = None
+        for route in solution2.routes:
+            dis = route.sum_distance()
+            if dis < min_dis:
+                min_dis = dis
+                min_route = route
+        for node in min_route.visit[1:-1]:
+            for route in solution1.routes:
+                if node in route:
+                    route.visit.remove(node)
+                    if len(route) == 2:
+                        solution1.routes.remove(route)
+                    break
+        for node in min_route.visit[1:-1]:
+            to_route, insert_place_to_route = Operation.choose_best_insert(solution1, node, list(range(len(solution1.routes))))
+            solution1.routes[to_route].visit.insert(insert_place_to_route, node)
+        return solution1
 
 
-class Evolution:
+class VNS_TS_Evolution:
     # 构造属性
     model = None
 
-    vns_neighbour_Rts = 0
-    vns_neighbour_max = 0
-    eta_feas = 0
-    eta_dist = 0
-    Delta_SA = 0.0
+    vns_neighbour_Rts = 4
+    vns_neighbour_max = 5
+    eta_feas = 50
+    eta_dist = 20
+    Delta_SA = 0.08
 
-    penalty_0 = tuple()
+    penalty_0 = (10, 10, 10)
     penalty_min = tuple()
     penalty_max = tuple()
     delta = 0.0
@@ -160,7 +185,7 @@ class Evolution:
             assert(hasattr(self, key))
             setattr(self, key, value)
 
-    def random_create_vnsts(self) -> Solution:
+    def random_create(self) -> Solution:
         x = random.uniform(self.model.get_map_bound()[0], self.model.get_map_bound()[1])
         y = random.uniform(self.model.get_map_bound()[2], self.model.get_map_bound()[3])
         choose = self.model.customers[:]
@@ -213,32 +238,6 @@ class Evolution:
 
         return Solution(routes)
 
-    def random_create_dema(self) -> Solution:
-        choose = self.model.customers[:]
-        random.shuffle(choose)
-        routes = []
-        building_route_visit = [self.model.depot]
-        i = 0
-        while i < len(choose):
-            try_route = Route(building_route_visit+[choose[i], self.model.depot])
-            if try_route.feasible_weight(self.model.vehicle) and try_route.feasible_time(self.model.vehicle):
-                if i == len(choose)-1:
-                    routes.append(try_route)
-                    break
-                building_route_visit.append(choose[i])
-                i += 1
-            else:
-                building_route_visit.append(self.model.depot)
-                routes.append(Route(building_route_visit))
-                building_route_visit = [self.model.depot]
-        return Solution(routes)
-
-    def initialization_dema(self) -> list:
-        population = []
-        for _ in range(self.size):
-            population.append(self.random_create_dema())
-        return population
-
     def create_vns_neighbour(self, Rts: int, max: int) -> list:
         assert Rts >= 2 and max >= 1
         self.vns_neighbour = []
@@ -249,7 +248,7 @@ class Evolution:
     def tabu_search(self, S: Solution, eta_tabu: int) -> Solution:
         return S
 
-    def VNS_TS(self) -> Solution:
+    def main(self) -> Solution:
         self.create_vns_neighbour(self.vns_neighbour_Rts, self.vns_neighbour_max)
         S = self.random_create_vnsts()
         k = 0
@@ -276,3 +275,60 @@ class Evolution:
                     i -= 1
             i += 1
         return S
+
+
+class DEMA_Evolution:
+    # 构造属性
+    model = None
+    penalty = (15, 5, 10)
+    maxiter_evo = 10
+    size = 30
+    cross_prob = 0.7
+    infeasible_proportion = 0.25
+    sigma = (1, 5, 10)
+    theta = 0.5
+    maxiter_tabu_multiply = 4
+    max_neighbour_multiply = 3
+    tabu_len = 4
+    # 状态属性
+    cross_score = [0, 0]
+    cross_call_times = [0, 0]
+    cross_weigh = [0, 0]
+
+    def __init__(self, model: Model, **param) -> None:
+        self.model = model
+        for key, value in param.items():
+            assert(hasattr(self, key))
+            setattr(self, key, value)
+
+    def random_create(self) -> Solution:
+        choose = self.model.customers[:]
+        random.shuffle(choose)
+        routes = []
+        building_route_visit = [self.model.depot]
+        i = 0
+        while i < len(choose):
+            try_route = Route(building_route_visit+[choose[i], self.model.depot])
+            if try_route.feasible_weight(self.model.vehicle) and try_route.feasible_time(self.model.vehicle):
+                if i == len(choose)-1:
+                    routes.append(try_route)
+                    break
+                building_route_visit.append(choose[i])
+                i += 1
+            else:
+                building_route_visit.append(self.model.depot)
+                routes.append(Route(building_route_visit))
+                building_route_visit = [self.model.depot]
+        return Solution(routes)
+
+    def initialization(self) -> list:
+        population = []
+        for _ in range(self.size):
+            population.append(self.random_create())
+        return population
+
+    def ACO_GM(self, P: list) -> list:
+        pass
+
+    def main(self):
+        pass

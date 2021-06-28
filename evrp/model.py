@@ -389,6 +389,7 @@ class Solution:
     routes = []
 
     def __init__(self, routes: list) -> None:
+        assert isinstance(routes[0], Route)
         self.routes = routes
 
     def __str__(self) -> str:
