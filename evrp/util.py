@@ -19,5 +19,5 @@ class SA:
         self.T0 = Delta_SA/np.log(2)
         self.Delta_T = (self.T0-0.0001)/0.8*max_iter
 
-    def probability(self, S_new: object, S: object, iter: int, model: object, penalty: tuple) -> float:
-        return np.exp(-(S_new.get_objective(model, penalty)-S.get_objective(model, penalty))/(self.T0-self.delta_T*iter))
+    def probability(self, S_new: float, S: float, iter: int) -> float:
+        return np.exp(-(S_new-S)/(self.T0-self.delta_T*iter))

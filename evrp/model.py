@@ -437,15 +437,90 @@ class Solution:
         actual_select = [None]*len(self.routes)
         for route_i in sel:
             actual_select[route_i] = self.routes[route_i].random_segment_range(max)
-        backup_sol = self.copy()
+        ret_sol = self.copy()
         for sel_i in range(len(sel)):
-            backup_sol.routes[sel[sel_i]].visit[actual_select[sel[sel_i]][0]:actual_select[sel[sel_i]][1]] = self.routes[sel[(sel_i+1) % len(sel)]].visit[actual_select[sel[(sel_i+1) % len(sel)]][0]:actual_select[sel[(sel_i+1) % len(sel)]][1]]
+            ret_sol.routes[sel[sel_i]].visit[actual_select[sel[sel_i]][0]:actual_select[sel[sel_i]][1]] = self.routes[sel[(sel_i+1) % len(sel)]].visit[actual_select[sel[(sel_i+1) % len(sel)]][0]:actual_select[sel[(sel_i+1) % len(sel)]][1]]
 
-        for route in backup_sol.routes:
+        for route in ret_sol.routes:
             if len(route.visit) == 2:
-                backup_sol.routes.remove(route)
+                ret_sol.routes.remove(route)
 
-        return backup_sol
+        return ret_sol
+
+    def two_opt(self, first_which: int, first_where: int, second_which: int, second_where: int) -> object:
+        assert first_where >= 0 and first_where <= len(self.routes[first_which].visit)-2
+        assert second_where >= 0 and second_where <= len(self.routes[second_which].visit)-2
+        ret_sol = self.copy()
+        ret_sol.routes[first_which].visit[first_where+1:] = self.routes[second_which].visit[second_where+1:]
+        ret_sol.routes[second_which].visit[second_where+1:] = self.routes[first_which].visit[first_where+1:]
+
+        if len(ret_sol.routes[first_which].visit) == 2:
+            del ret_sol.routes[first_which]
+        elif len(ret_sol.routes[second_which].visit) == 2:
+            del ret_sol.routes[second_which]
+
+        return ret_sol
+
+    def relocate(self, which: int, where: int) -> object:
+        assert where >= 1 and where <= len(self.routes[which].visit)-2
+        if len(self.routes[which].visit) > 3:
+            new_which = random.choice(range(len(self.routes)))
+        else:
+            choose = list(range(len(self.routes)))
+            choose.remove(which)
+            new_which = random.choice(choose)
+        ret_sol = self.copy()
+        if new_which != which:
+            new_where = random.choice(range(1, len(self.routes[new_which].visit)))
+            ret_sol[new_which].visit.insert(new_where, self.routes[which].visit[where])
+            del ret_sol.routes[which].visit[where]
+            if len(ret_sol.routes[which].visit) == 2:
+                del ret_sol.routes[which]
+        else:
+            choose = list(range(1, len(self.routes[new_which].visit)))
+            choose.remove(where)
+            choose.remove(where+1)
+            new_where = random.choice(choose)
+            ret_sol[which].visit.insert(new_where, self.routes[which].visit[where])
+            if new_where > where:
+                del ret_sol.routes[which].visit[where]
+            else:
+                del ret_sol.routes[which].visit[where+1]
+        return ret_sol
+
+    def exchange(self) -> object:
+        ret_sol = self.copy()
+        while True:
+            which1 = random.choice(range(len(self.routes)))
+            which2 = random.choice(range(len(self.routes)))
+            while which1 == which2:
+                if len(self.routes[which1].visit) <= 3:
+                    which1 = random.choice(range(len(self.routes)))
+                    which2 = random.choice(range(len(self.routes)))
+                else:
+                    break
+            if which1 == which2:
+                where1, where2 = random.sample(range(1, len(self.routes[which1].visit)-1), 2)
+                if isinstance(self.routes[which1].visit[where1], Recharger) or isinstance(self.routes[which2].visit[where2], Recharger):
+                    continue
+                ret_sol.routes[which1].visit[where1] = self.routes[which2].visit[where2]
+                ret_sol.routes[which2].visit[where2] = self.routes[which1].visit[where1]
+            else:
+                where1 = random.choice(list(range(1, len(self.routes[which1].visit)-1)))
+                where2 = random.choice(list(range(1, len(self.routes[which2].visit)-1)))
+                if isinstance(self.routes[which1].visit[where1], Recharger) or isinstance(self.routes[which2].visit[where2], Recharger):
+                    continue
+                ret_sol.routes[which1].visit[where1] = self.routes[which2].visit[where2]
+                ret_sol.routes[which2].visit[where2] = self.routes[which1].visit[where1]
+            break
+        return ret_sol
+
+    def stationInRe(self) -> object:
+        pass
+
+    def addVehicle(self, model: Model) -> None:
+        if len(self.routes) < model.max_vehicle:
+            self.routes.append(Route([self.routes[0].visit[0], self.routes[0].visit[0]]))
 
 
 class Evolution:
@@ -544,7 +619,6 @@ class Evolution:
                 self.vns_neighbour.append((R, m))
 
     def tabu_search(self, S: Solution, eta_tabu: int) -> Solution:
-        _ = eta_tabu
         return S
 
     def VNS_TS(self) -> Solution:
@@ -552,18 +626,25 @@ class Evolution:
         S = self.random_create()
         k = 0
         i = 0
-        feasibilityPhase = False
-        SA = util.SA(self.Delta_SA, self.eta_dist)
+        feasibilityPhase = True
+        acceptSA = util.SA(self.Delta_SA, self.eta_dist)
         while feasibilityPhase or i < self.eta_dist:
             S1 = S.cyclic_exchange(*self.vns_neighbour[k])
-            S2 = self.tabu_search(S1, 0)
-            if random.random() < SA.probability(S2, S, i, self.model, self.penalty_0):
+            S2 = self.tabu_search(S1, self.eta_tabu)
+            if random.random() < acceptSA.probability(S2.get_objective(self.model, self.penalty_0), S.get_objective(self.model, self.penalty_0), i):
                 S = S2
-                #print(S)
+                #print(i, S)
+                # print(S.feasible(self.model),S.sum_distance())
                 k = 0
             else:
                 k = (k+1) % len(self.vns_neighbour)
             if feasibilityPhase:
-                pass
+                if not S.feasible(self.model):
+                    if i == self.eta_feas:
+                        S.addVehicle(self.model)
+                        i -= 1
+                else:
+                    feasibilityPhase = False
+                    i -= 1
             i += 1
         return S
