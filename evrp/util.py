@@ -1,5 +1,6 @@
 import random
 import numpy as np
+import geatpy as ea
 
 
 class Util:
@@ -60,3 +61,23 @@ class Util:
             else:
                 pk_win.append(pk[i+1])
         return pk_win
+
+    @staticmethod
+    def pareto_sort(P: list, objv: list, needNum: int = None, needLevel: int = None):
+        objv = np.array(objv)
+        levels, criLevel = ea.ndsortESS(objv, needNum, needLevel)
+        dis = ea.crowdis(objv, levels)
+        sortP = []
+        for lv in range(1, criLevel):
+            indexs = np.where(levels == lv)[0]
+            indexs_sorted = sorted(indexs, key=lambda x: dis[x], reverse=True)
+            for i in indexs_sorted:
+                sortP.append(P[i])
+        indexs = np.where(levels == criLevel)[0]
+        indexs_sorted = sorted(indexs, key=lambda x: dis[x], reverse=True)
+        if needNum is None:
+            needNum = len(P)
+        for i in indexs_sorted:
+            if len(sortP) < needNum:
+                sortP.append(P[i])
+        return sortP

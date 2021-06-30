@@ -171,6 +171,13 @@ class Operation:
         return num/(len(sol1arcs)+len(sol2arcs))
 
     @staticmethod
+    def overlapping_degree_population(solution: Solution, population: list) -> float:
+        sum = 0
+        for p in population:
+            sum += Operation.overlapping_degree(solution, p)
+        return sum/len(population)
+
+    @staticmethod
     def similarity_degree(solution: Solution, population: list) -> float:
         solarcs = []
         for route in solution.routes:
@@ -190,8 +197,8 @@ class Operation:
         return up/down
 
     @staticmethod
-    def charging_modification(solution: Solution, model: Model) -> bool:
-        solution.clear_status()
+    def charging_modification(solution: Solution, model: Model) -> tuple:
+        solution = solution.copy()
 
         unused_station = model.rechargers[:]
         for route in solution.routes:
@@ -199,11 +206,12 @@ class Operation:
             for i in route.rechargers:
                 unused_station.remove(route.visit[i])
         if len(unused_station) == 0:
-            return False
+            return solution, False
 
         for route in solution.routes:
             if len(unused_station) == 0:
-                return True
+                solution.clear_status()
+                return solution, True
             if route.feasible_weight(model.vehicle) and route.feasible_time(model.vehicle) and not route.feasible_battery(model.vehicle):
                 left_fail_index = np.where(route.arrive_remain_battery < 0)[0][0]
                 right_fail_index = len(route.visit)
@@ -274,7 +282,8 @@ class Operation:
                             unused_station.remove(right_use)
                     else:
                         route.visit.insert(left_choose[-1][0], left_choose[-1][1])
-                        return True
+                        solution.clear_status()
+                        return solution, True
                 else:
                     common_insert.sort()
                     choose = []
@@ -294,5 +303,5 @@ class Operation:
                     else:
                         route.visit.insert(choose[-1][0], choose[-1][1])
                         unused_station.remove(choose[-1][1])
-
-        return True
+        solution.clear_status()
+        return solution, True

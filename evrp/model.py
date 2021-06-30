@@ -287,8 +287,8 @@ class Route:
             self.cal_remain_battery(vehicle)
         return np.abs(np.sum(self.arrive_remain_battery, where=self.arrive_remain_battery < 0))
 
-    def get_objective(self, vehicle: Vehicle, alpha: float, beta: float, gamma: float) -> float:
-        return self.sum_distance()+alpha*self.penalty_capacity(vehicle)+beta*self.penalty_time(vehicle)+gamma*self.penalty_battery(vehicle)
+    def get_objective(self, vehicle: Vehicle, penalty: tuple) -> float:
+        return self.sum_distance()+penalty[0]*self.penalty_capacity(vehicle)+penalty[1]*self.penalty_time(vehicle)+penalty[2]*self.penalty_battery(vehicle)
 
     def clear_status(self) -> None:
         self.arrive_load_weight = None
@@ -446,7 +446,7 @@ class Solution:
     def get_objective(self, model: Model, penalty: tuple) -> float:
         ret = 0
         for route in self.routes:
-            ret += route.get_objective(model.vehicle, penalty[0], penalty[1], penalty[2])
+            ret += route.get_objective(model.vehicle, penalty)
         return ret
 
     def clear_status(self) -> None:

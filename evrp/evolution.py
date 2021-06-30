@@ -138,9 +138,9 @@ class DEMA_Evolution:
     max_neighbour_multiply = 3
     tabu_len = 4
     # 状态属性
-    cross_score = [0, 0]
+    cross_score = [0.0, 0.0]
     cross_call_times = [0, 0]
-    cross_weigh = [0, 0]
+    cross_weigh = [0.0, 0.0]
 
     def __init__(self, model: Model, **param) -> None:
         self.model = model
@@ -220,11 +220,86 @@ class DEMA_Evolution:
     def initialization(self) -> list:
         population = []
         for _ in range(self.size):
-            population.append(self.random_create())
+            sol = self.random_create()
+            sol, _ = Operation.charging_modification(sol, self.model)
+            population.append(sol)
         return population
 
     def ACO_GM(self, P: list) -> list:
+        fes_P = []
+        infes_P = []
+        for sol in P:
+            if sol.feasible(self.model):
+                fes_P.append(sol)
+            else:
+                infes_P.append(sol)
+        fes_P.sort(key=lambda sol: sol.get_objective(self.model, self.penalty))
+        obj_value = []
+        for sol in infes_P:
+            overlapping_degree = Operation.overlapping_degree_population(sol, P)
+            objective = sol.get_objective(self.model, self.penalty)
+            obj_value.append([objective, overlapping_degree])
+        infes_P = Util.pareto_sort(infes_P, obj_value)
+        P = fes_P+infes_P
+        choose = Util.binary_tournament(len(P))
+        P_parent = []
+        for i in choose:
+            P_parent.append(P[i])
+        P_child = []
+        while len(P_child) < self.size:
+            for i in range(2):
+                if self.cross_call_times[i] == 0:
+                    self.cross_weigh[i] = self.cross_weigh[i]
+                else:
+                    self.cross_weigh[i] = self.theta*np.pi/self.cross_call_times[i]+(1-self.theta)*self.cross_weigh[i]
+            if self.cross_weigh[0] == 0 and self.cross_weigh[1] == 0:
+                sel_prob = np.array([0.5, 0.5])
+            else:
+                sel_prob = np.array(self.cross_weigh)/np.sum(np.array(self.cross_weigh))
+            sel = Util.wheel_select(sel_prob)
+
+            if sel == 0:
+                S_parent = random.choice(P_parent)
+                S = Operation.ACO_GM_cross1(S_parent)
+            elif sel == 1:
+                S_parent, S2 = random.sample(P_parent, 2)
+                S = Operation.ACO_GM_cross2(S_parent, S2)
+
+            self.cross_call_times[sel] += 1
+            cost = S.get_objective(self.model, self.penalty)
+            all_cost = [sol.get_objective(self.model, self.penalty) for sol in P]
+            if cost < all(all_cost):
+                self.cross_score[sel] += self.sigma[0]
+            elif cost < S_parent.get_objective(self.model, self.penalty):
+                self.cross_score[sel] += self.sigma[1]
+            else:
+                self.cross_score[sel] += self.sigma[2]
+
+            P_child.append(S)
+        return P_child
+
+    def ISSD(self, P: list) -> list:
         pass
 
-    def main(self):
+    def MVS(self, P: list) -> list:
         pass
+
+    def update_S(self, P: list, S_best: Solution, cost: float) -> Solution:
+        min_cost = cost
+        S_best = S_best
+        for S in P:
+            cost = S.get_objective(self.model, self.penalty)
+            if cost < min_cost:
+                S_best = S
+                min_cost = cost
+        return S_best, min_cost
+
+    def main(self) -> Solution:
+        P = self.initialization()
+        S_best, min_cost = self.update_S(P, None, float('inf'))
+        for iter in range(self.maxiter_evo):
+            print(iter, min_cost)
+            P_child = self.ACO_GM(P)
+            P = P_child
+            S_best, min_cost = self.update_S(P, S_best, min_cost)
+        return S_best, min_cost
