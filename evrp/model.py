@@ -19,7 +19,8 @@ class Node(metaclass=ABCMeta):
         self.y = y
 
     def __repr__(self) -> str:
-        return '{} {} at {}'.format(type(self).__name__, self.id, id(self))
+        # return '{} {} at {}'.format(type(self).__name__, self.id, id(self))
+        return '{} {}'.format(type(self).__name__, self.id)
 
     def distance_to(self, node: object) -> float:
         assert isinstance(node, Node)
@@ -315,13 +316,13 @@ class Model:
     # 构造属性
     data_file = ''
     file_type = ''
-
     vehicle = Vehicle()
     max_vehicle = 0
-    # 计算属性
     depot = None
     customers = []
     rechargers = []
+    # 计算属性
+    nearest_station = {}
 
     def __init__(self, data_file: str = '', file_type: str = '', **para) -> None:
         self.data_file = data_file
@@ -382,6 +383,17 @@ class Model:
         min_y = min(cus_min_y, rec_min_y, self.depot.y)
         max_y = max(cus_max_y, rec_max_y, self.depot.y)
         return min_x, max_x, min_y, max_y
+
+    def find_nearest_station(self) -> None:
+        self.nearest_station = {}
+        self.nearest_station[self.depot] = sorted(self.rechargers, key=lambda rec: self.depot.distance_to(rec))
+        for cus in self.customers:
+            self.nearest_station[cus] = sorted(self.rechargers, key=lambda rec: cus.distance_to(rec))
+        for charge in self.rechargers:
+            other_charge = self.rechargers[:]
+            other_charge.remove(charge)
+            other_charge.sort(key=lambda rec: charge.distance_to(rec))
+            self.nearest_station[charge] = other_charge
 
 
 class Solution:
