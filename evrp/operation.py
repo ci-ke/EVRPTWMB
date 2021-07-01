@@ -41,14 +41,14 @@ class Operation:
     def relocate(solution: Solution, which: int, where: int) -> Solution:
         assert where >= 1 and where <= len(solution.routes[which].visit)-2
         if len(solution.routes[which].visit) > 3:
-            new_which = random.randint(0, len(solution.routes)-1)  # random.choice(range(len(solution.routes)))
+            new_which = random.randint(0, len(solution.routes)-1)
         else:
             choose = list(range(len(solution.routes)))
             choose.remove(which)
             new_which = random.choice(choose)
         ret_sol = solution.copy()
         if new_which != which:
-            new_where = random.randint(1, len(solution.routes[new_which].visit)-1)  # random.choice(range(1, len(solution.routes[new_which].visit)))
+            new_where = random.randint(1, len(solution.routes[new_which].visit)-1)
             ret_sol[new_which].visit.insert(new_where, solution.routes[which].visit[where])
             del ret_sol.routes[which].visit[where]
             if len(ret_sol.routes[which].visit) == 2:
@@ -66,10 +66,9 @@ class Operation:
         return ret_sol
 
     @staticmethod
-    def exchange(solution: Solution) -> Solution:
-        ret_sol = solution.copy()
+    def exchange_choose(solution: Solution) -> tuple:
         while True:
-            which1 = random.randint(0, len(solution.routes)-1)  # random.choice(range(len(solution.routes)))
+            which1 = random.randint(0, len(solution.routes)-1)
             which2 = random.randint(0, len(solution.routes)-1)
             while which1 == which2:
                 if len(solution.routes[which1].visit) <= 3:
@@ -79,23 +78,26 @@ class Operation:
                     break
             if which1 == which2:
                 where1, where2 = random.sample(range(1, len(solution.routes[which1].visit)-1), 2)
-                if isinstance(solution.routes[which1].visit[where1], Recharger) or isinstance(solution.routes[which2].visit[where2], Recharger):
-                    continue
-                ret_sol.routes[which1].visit[where1] = solution.routes[which2].visit[where2]
-                ret_sol.routes[which2].visit[where2] = solution.routes[which1].visit[where1]
+                # if isinstance(solution.routes[which1].visit[where1], Recharger) or isinstance(solution.routes[which2].visit[where2], Recharger):
+                #    continue
+                return which1, where1, which2, where2
             else:
-                where1 = random.randint(1, len(solution.routes[which1].visit)-2)  # random.choice(list(range(1, len(solution.routes[which1].visit)-1)))
-                where2 = random.randint(1, len(solution.routes[which2].visit)-2)  # random.choice(list(range(1, len(solution.routes[which2].visit)-1)))
-                if isinstance(solution.routes[which1].visit[where1], Recharger) or isinstance(solution.routes[which2].visit[where2], Recharger):
-                    continue
-                ret_sol.routes[which1].visit[where1] = solution.routes[which2].visit[where2]
-                ret_sol.routes[which2].visit[where2] = solution.routes[which1].visit[where1]
-            break
+                where1 = random.randint(1, len(solution.routes[which1].visit)-2)
+                where2 = random.randint(1, len(solution.routes[which2].visit)-2)
+                # if isinstance(solution.routes[which1].visit[where1], Recharger) or isinstance(solution.routes[which2].visit[where2], Recharger):
+                #    continue
+                return which1, where1, which2, where2
+
+    @staticmethod
+    def exchange_action(solution: Solution, which1: int, where1: int, which2: int, where2: int) -> Solution:
+        ret_sol = solution.copy()
+        ret_sol.routes[which1].visit[where1] = solution.routes[which2].visit[where2]
+        ret_sol.routes[which2].visit[where2] = solution.routes[which1].visit[where1]
         return ret_sol
 
     @staticmethod
     def stationInRe(solution: Solution) -> Solution:
-        pass
+        return solution
 
     def choose_best_insert(solution: Solution, node: Node, route_indexes: list) -> tuple:
         min_increase_dis_to_route = float('inf')

@@ -128,7 +128,7 @@ class DEMA_Evolution:
     # 构造属性
     model = None
     penalty = (15, 5, 10)
-    maxiter_evo = 10
+    maxiter_evo = 100
     size = 30
     cross_prob = 0.7
     infeasible_proportion = 0.25
@@ -137,10 +137,14 @@ class DEMA_Evolution:
     maxiter_tabu_multiply = 4
     max_neighbour_multiply = 3
     tabu_len = 4
+    local_search_step = 10
+    charge_modify_step = 14
     # 状态属性
     cross_score = [0.0, 0.0]
     cross_call_times = [0, 0]
     cross_weigh = [0.0, 0.0]
+    last_local_search = 0
+    last_charge_modify = 0
 
     def __init__(self, model: Model, **param) -> None:
         self.model = model
@@ -185,7 +189,7 @@ class DEMA_Evolution:
 
             try_route = Route(building_route_visit)
             if try_route.feasible_weight(self.model.vehicle) and try_route.feasible_time(self.model.vehicle):
-                #del choose[choose_index]
+                # del choose[choose_index]
                 choose_index += 1
             else:
                 del building_route_visit[decide_insert_place]
@@ -234,12 +238,14 @@ class DEMA_Evolution:
             else:
                 infes_P.append(sol)
         fes_P.sort(key=lambda sol: sol.get_objective(self.model, self.penalty))
+
         obj_value = []
         for sol in infes_P:
             overlapping_degree = Operation.overlapping_degree_population(sol, P)
             objective = sol.get_objective(self.model, self.penalty)
             obj_value.append([objective, overlapping_degree])
         infes_P = Util.pareto_sort(infes_P, obj_value)
+        
         P = fes_P+infes_P
         choose = Util.binary_tournament(len(P))
         P_parent = []
@@ -278,11 +284,102 @@ class DEMA_Evolution:
             P_child.append(S)
         return P_child
 
-    def ISSD(self, P: list) -> list:
-        pass
+    def ISSD(self, P: list, iter: int) -> list:
+        SP1 = []
+        SP2 = []
+        for sol in P:
+            if sol.feasible(self.model):
+                SP1.append(sol)
+            else:
+                SP2.append(sol)
+        SP1.sort(key=lambda sol: sol.get_objective(self.model, self.penalty))
+        obj_value = []
+        for sol in SP2:
+            similarity_degree = Operation.similarity_degree(sol, P)
+            objective = sol.get_objective(self.model, self.penalty)
+            obj_value.append([objective, similarity_degree])
+        SP2 = Util.pareto_sort(SP2, obj_value)
+        sp1up = int((iter/self.maxiter_evo)*self.size)
+        sp2up = self.size-sp1up
+        P = SP1[:sp1up]+SP2[:sp2up]
+        SP1 = SP1[sp1up:]
+        SP2 = SP2[sp2up:]
+        for sol in SP1:
+            if len(P) < self.size:
+                P.append(sol)
+        for sol in SP2:
+            if len(P) < self.size:
+                P.append(sol)
+        assert(len(P) == self.size)
+        return P
+
+    def tabu_search(self, solution: Solution) -> Solution:
+        best_sol = solution
+        best_val = solution.get_objective(self.model, self.penalty)
+        tabu_list = {}
+        for _ in range(int(self.maxiter_tabu_multiply*self.size)):
+            actions = []
+            while len(actions) < int(self.max_neighbour_multiply*self.size):
+                act = random.choice(['exchange', 'relocate'])
+                if act == 'exchange':
+                    which1, where1, which2, where2 = Operation.exchange_choose(solution)
+                    if ('exchange', which1, where1, which2, where2) not in actions:
+                        actions.append(('exchange', which1, where1, which2, where2))
+                else:
+                    which = random.randint(0, len(solution.routes)-1)
+                    where = random.randint(1, len(solution.routes[which].visit)-2)
+                    if ('relocate', which, where) not in actions:
+                        actions.append(('relocate', which, where))
+            local_best_sol = None
+            local_best_val = float('inf')
+            local_best_action = None
+            for action in actions:
+                if action[0] == 'exchange':
+                    tabu_status = tabu_list.get((action[0], solution.routes[action[1]].visit[action[2]], solution.routes[action[3]].visit[action[4]]), 0)
+                    if tabu_status == 0:
+                        try_sol = Operation.exchange_action(solution, *action[1:])
+                        try_val = try_sol.get_objective(self.model, self.penalty)
+                        if try_val < local_best_val:
+                            local_best_sol = try_sol
+                            local_best_val = try_val
+                            local_best_action = action
+                else:
+                    tabu_status = tabu_list.get((action[0], solution.routes[action[1]].visit[action[2]]), 0)
+                    if tabu_status == 0:
+                        try_sol = Operation.relocate(solution, *action[1:])
+                        try_val = try_sol.get_objective(self.model, self.penalty)
+                        if try_val < local_best_val:
+                            local_best_sol = try_sol
+                            local_best_val = try_val
+                            local_best_action = action
+            for key in tabu_list:
+                if tabu_list[key] > 0:
+                    tabu_list[key] -= 1
+            if local_best_action[0] == 'exchange':
+                tabu_list[('exchange', solution.routes[local_best_action[1]].visit[local_best_action[2]], solution.routes[local_best_action[3]].visit[local_best_action[4]])] = self.tabu_len
+                tabu_list[('exchange', solution.routes[local_best_action[3]].visit[local_best_action[4]], solution.routes[local_best_action[1]].visit[local_best_action[2]])] = self.tabu_len
+            else:
+                tabu_list[('relocate', solution.routes[local_best_action[1]].visit[local_best_action[2]])] = self.tabu_len
+            if local_best_val < best_val:
+                best_sol = local_best_sol
+                best_val = local_best_val
+
+        return best_sol
 
     def MVS(self, P: list) -> list:
-        pass
+        if self.last_local_search >= self.local_search_step:
+            retP = []
+            for sol in P:
+                retP.append(self.tabu_search(sol))
+            self.last_local_search = 0
+            return retP
+        elif self.last_charge_modify >= self.charge_modify_step:
+            retP = []
+            for sol in P:
+                retP.append(Operation.charging_modification(sol, self.model))
+            self.last_charge_modify = 0
+            return retP
+        return P
 
     def update_S(self, P: list, S_best: Solution, cost: float) -> Solution:
         min_cost = cost
@@ -300,6 +397,7 @@ class DEMA_Evolution:
         for iter in range(self.maxiter_evo):
             print(iter, min_cost)
             P_child = self.ACO_GM(P)
-            P = P_child
+            P = self.ISSD(P+P_child, iter)
+            P = self.MVS(P)
             S_best, min_cost = self.update_S(P, S_best, min_cost)
         return S_best, min_cost

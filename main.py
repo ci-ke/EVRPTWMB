@@ -12,5 +12,5 @@ model = Model(file, max_vehicle=100)
 model.read_data()
 
 evo = DEMA_Evolution(model)
-S = evo.main()
-print(S)
+S, cost = evo.main()
+print(S, cost, sep='\n')
