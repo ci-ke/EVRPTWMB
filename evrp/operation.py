@@ -128,7 +128,9 @@ class Operation:
             select = Util.wheel_select(avg_dis)
             rest_routes_index = list(range(len(solution.routes)))
             rest_routes_index.remove(select)
-            for node in solution.routes[select].visit[1:-1]:
+            visit_list = solution.routes[select].visit[1:-1]
+            random.shuffle(visit_list)
+            for node in visit_list:
                 to_route, insert_place_to_route = Operation.choose_best_insert(solution, node, rest_routes_index)
                 solution.routes[to_route].visit.insert(insert_place_to_route, node)
             del solution.routes[select]
@@ -151,7 +153,9 @@ class Operation:
                     if len(route) == 2:
                         solution1.routes.remove(route)
                     break
-        for node in min_route.visit[1:-1]:
+        visit_list = min_route.visit[1:-1]
+        random.shuffle(visit_list)
+        for node in visit_list:
             to_route, insert_place_to_route = Operation.choose_best_insert(solution1, node, list(range(len(solution1.routes))))
             solution1.routes[to_route].visit.insert(insert_place_to_route, node)
         return solution1

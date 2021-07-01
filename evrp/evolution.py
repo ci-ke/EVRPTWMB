@@ -245,7 +245,7 @@ class DEMA_Evolution:
             objective = sol.get_objective(self.model, self.penalty)
             obj_value.append([objective, overlapping_degree])
         infes_P = Util.pareto_sort(infes_P, obj_value)
-        
+
         P = fes_P+infes_P
         choose = Util.binary_tournament(len(P))
         P_parent = []
@@ -391,7 +391,7 @@ class DEMA_Evolution:
                 min_cost = cost
         return S_best, min_cost
 
-    def main(self) -> Solution:
+    def main(self) -> tuple:
         P = self.initialization()
         S_best, min_cost = self.update_S(P, None, float('inf'))
         for iter in range(self.maxiter_evo):
