@@ -386,14 +386,20 @@ class Model:
 
     def find_nearest_station(self) -> None:
         self.nearest_station = {}
+        station00 = None
+        for station in self.rechargers:
+            if station.x == self.depot.x and station.y == self.depot.y:
+                station00 = station
+                break
         self.nearest_station[self.depot] = sorted(self.rechargers, key=lambda rec: self.depot.distance_to(rec))
+        self.nearest_station[self.depot].remove(station00)
         for cus in self.customers:
             self.nearest_station[cus] = sorted(self.rechargers, key=lambda rec: cus.distance_to(rec))
-        for charge in self.rechargers:
-            other_charge = self.rechargers[:]
-            other_charge.remove(charge)
-            other_charge.sort(key=lambda rec: charge.distance_to(rec))
-            self.nearest_station[charge] = other_charge
+        for station in self.rechargers:
+            other_staion = self.rechargers[:]
+            other_staion.remove(station)
+            other_staion.sort(key=lambda rec: station.distance_to(rec))
+            self.nearest_station[station] = other_staion
 
 
 class Solution:

@@ -225,7 +225,7 @@ class DEMA_Evolution:
         population = []
         for _ in range(self.size):
             sol = self.random_create()
-            sol, _ = Operation.charging_modification(sol, self.model)
+            sol = Operation.charging_modification(sol, self.model)
             population.append(sol)
         return population
 
@@ -381,7 +381,7 @@ class DEMA_Evolution:
             retP = []
             for i, sol in enumerate(P):
                 print(iter, i)
-                retP.append(Operation.charging_modification(sol, self.model)[0])
+                retP.append(Operation.charging_modification(sol, self.model))
             self.last_charge_modify = 0
             return retP
         return P

@@ -203,21 +203,10 @@ class Operation:
         return up/down
 
     @staticmethod
-    def charging_modification(solution: Solution, model: Model) -> tuple:
+    def charging_modification(solution: Solution, model: Model) -> Solution:
         solution = solution.copy()
 
-        unused_station = model.rechargers[:]
         for route in solution.routes:
-            route.find_charge_station()
-            for i in route.rechargers:
-                unused_station.remove(route.visit[i])
-        if len(unused_station) == 0:
-            return solution, False
-
-        for route in solution.routes:
-            if len(unused_station) == 0:
-                solution.clear_status()
-                return solution, True
             if route.feasible_weight(model.vehicle) and route.feasible_time(model.vehicle) and not route.feasible_battery(model.vehicle):
                 left_fail_index = np.where(route.arrive_remain_battery < 0)[0][0]
                 right_fail_index = len(route.visit)
@@ -238,98 +227,52 @@ class Operation:
                     model.find_nearest_station()
 
                 assert(len(left_insert) != 0)
-                
+
                 if len(common_insert) == 0 and len(right_insert) != 0:
                     left_choose = []
                     right_choose = []
                     for node_i in left_insert:
-                        for station in model.nearest_station[route.visit[node_i]]:
-                            if station in unused_station:
-                                left_choose.append((node_i, station))
-                                break
-                            assert('impossible')
+                        left_choose.append((node_i, model.nearest_station[route.visit[node_i]][0]))
                     for node_i in right_insert:
-                        for station in model.nearest_station[route.visit[node_i]]:
-                            if station in unused_station:
-                                right_choose.append((node_i, station))
+                        right_choose.append((node_i, model.nearest_station[route.visit[node_i]][0]))
+                    for left in left_choose:
+                        for right in right_choose:
+                            route.visit.insert(left[0], left[1])
+                            route.visit.insert(right[0]+1, right[1])
+                            if route.feasible_battery(model.vehicle):
                                 break
-                            assert('impossible')
-                    if len(unused_station) > 1:
-                        for left in left_choose:
-                            for right in right_choose:
-                                if left[1] != right[1]:
-                                    right_use = right[1]
-                                else:
-                                    for station in model.nearest_station[route.visit[right[0]]]:
-                                        if station in unused_station and station != left[1]:
-                                            right_use = station
-                                            break
-                                route.visit.insert(left[0], left[1])
-                                route.visit.insert(right[0]+1, right_use)
-                                if route.feasible_battery(model.vehicle):
-                                    unused_station.remove(left[1])
-                                    unused_station.remove(right_use)
-                                    break
-                                else:
-                                    route.visit.remove(left[1])
-                                    route.visit.remove(right_use)
                             else:
-                                continue
-                            break
+                                del route.visit[right[0]+1]
+                                del route.visit[left[0]]
                         else:
-                            if right_choose[0][1] != left_choose[-1][1]:
-                                right_use = right_choose[0][1]
-                            else:
-                                for station in model.nearest_station[route.visit[right_choose[0][0]]]:
-                                    if station in unused_station and station != left_choose[-1][1]:
-                                        right_use = station
-                                        break
-                            route.visit.insert(left_choose[-1][0], left_choose[-1][1])
-                            route.visit.insert(right_choose[0][0], right_use)
-                            unused_station.remove(left_choose[-1][1])
-                            unused_station.remove(right_use)
-                    else:
-                        route.visit.insert(left_choose[-1][0], left_choose[-1][1])
-                        solution.clear_status()
-                        return solution, True
+                            continue
+                        break
                 elif len(common_insert) == 0 and len(right_insert) == 0:
                     choose = []
                     for node_i in left_insert:
-                        for station in model.nearest_station[route.visit[node_i]]:
-                            if station in unused_station:
-                                choose.append((node_i, station))
-                                break
-                            assert('impossible')
+                        choose.append((node_i, model.nearest_station[route.visit[node_i]][0]))
                     for pair in choose:
                         route.visit.insert(pair[0], pair[1])
                         if route.feasible_battery(model.vehicle):
-                            unused_station.remove(pair[1])
                             break
                         else:
-                            route.visit.remove(pair[1])
+                            del route.visit[pair[0]]
                     else:
                         route.visit.insert(choose[-1][0], choose[-1][1])
-                        unused_station.remove(choose[-1][1])
                 elif len(common_insert) != 0:
                     common_insert.sort()
                     choose = []
                     for node_i in common_insert:
-                        for station in model.nearest_station[route.visit[node_i]]:
-                            if station in unused_station:
-                                choose.append((node_i, station))
-                                break
-                            assert('impossible')
+                        choose.append((node_i, model.nearest_station[route.visit[node_i]][0]))
                     for pair in choose:
                         route.visit.insert(pair[0], pair[1])
                         if route.feasible_battery(model.vehicle):
-                            unused_station.remove(pair[1])
                             break
                         else:
-                            route.visit.remove(pair[1])
+                            del route.visit[pair[0]]
                     else:
                         route.visit.insert(choose[-1][0], choose[-1][1])
-                        unused_station.remove(choose[-1][1])
                 else:
                     assert('impossible')
         solution.clear_status()
-        return solution, True
+        return solution
