@@ -317,7 +317,8 @@ class DEMA_Evolution:
         best_sol = solution
         best_val = solution.get_objective(self.model, self.penalty)
         tabu_list = {}
-        for _ in range(int(self.maxiter_tabu_multiply*self.size)):
+        for iter in range(int(self.maxiter_tabu_multiply*self.size)):
+            print('tabu {}'.format(iter))
             actions = []
             while len(actions) < int(self.max_neighbour_multiply*self.size):
                 act = random.choice(['exchange', 'relocate'])
@@ -366,22 +367,26 @@ class DEMA_Evolution:
 
         return best_sol
 
-    def MVS(self, P: list) -> list:
+    def MVS(self, P: list, iter: int) -> list:
+        self.last_local_search += 1
+        self.last_charge_modify += 1
         if self.last_local_search >= self.local_search_step:
             retP = []
-            for sol in P:
+            for i, sol in enumerate(P):
+                print(iter, i)
                 retP.append(self.tabu_search(sol))
             self.last_local_search = 0
             return retP
         elif self.last_charge_modify >= self.charge_modify_step:
             retP = []
-            for sol in P:
-                retP.append(Operation.charging_modification(sol, self.model))
+            for i, sol in enumerate(P):
+                print(iter, i)
+                retP.append(Operation.charging_modification(sol, self.model)[0])
             self.last_charge_modify = 0
             return retP
         return P
 
-    def update_S(self, P: list, S_best: Solution, cost: float) -> Solution:
+    def update_S(self, P: list, S_best: Solution, cost: float) -> tuple:
         min_cost = cost
         S_best = S_best
         for S in P:
@@ -398,6 +403,6 @@ class DEMA_Evolution:
             print(iter, min_cost)
             P_child = self.ACO_GM(P)
             P = self.ISSD(P+P_child, iter)
-            P = self.MVS(P)
+            P = self.MVS(P, iter)
             S_best, min_cost = self.update_S(P, S_best, min_cost)
         return S_best, min_cost

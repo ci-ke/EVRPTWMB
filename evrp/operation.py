@@ -237,7 +237,9 @@ class Operation:
                 if len(model.nearest_station) == 0:
                     model.find_nearest_station()
 
-                if len(common_insert) == 0:
+                assert(len(left_insert) != 0)
+                
+                if len(common_insert) == 0 and len(right_insert) != 0:
                     left_choose = []
                     right_choose = []
                     for node_i in left_insert:
@@ -290,7 +292,25 @@ class Operation:
                         route.visit.insert(left_choose[-1][0], left_choose[-1][1])
                         solution.clear_status()
                         return solution, True
-                else:
+                elif len(common_insert) == 0 and len(right_insert) == 0:
+                    choose = []
+                    for node_i in left_insert:
+                        for station in model.nearest_station[route.visit[node_i]]:
+                            if station in unused_station:
+                                choose.append((node_i, station))
+                                break
+                            assert('impossible')
+                    for pair in choose:
+                        route.visit.insert(pair[0], pair[1])
+                        if route.feasible_battery(model.vehicle):
+                            unused_station.remove(pair[1])
+                            break
+                        else:
+                            route.visit.remove(pair[1])
+                    else:
+                        route.visit.insert(choose[-1][0], choose[-1][1])
+                        unused_station.remove(choose[-1][1])
+                elif len(common_insert) != 0:
                     common_insert.sort()
                     choose = []
                     for node_i in common_insert:
@@ -309,5 +329,7 @@ class Operation:
                     else:
                         route.visit.insert(choose[-1][0], choose[-1][1])
                         unused_station.remove(choose[-1][1])
+                else:
+                    assert('impossible')
         solution.clear_status()
         return solution, True
