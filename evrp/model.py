@@ -311,6 +311,15 @@ class Route:
                 cus_num += 1
         return self.sum_distance()/cus_num
 
+    def no_customer(self) -> bool:
+        if len(self.visit) == 2:
+            return True
+        else:
+            for node in self.visit[1:-1]:
+                if isinstance(node, Customer):
+                    return False
+            return True
+
 
 class Model:
     # 构造属性
@@ -448,6 +457,16 @@ class Solution:
             return False
         else:
             return True
+
+    def feasible_detail(self, model: Model) -> tuple:
+        ret_dict = {}
+        false_list = []
+        for i, route in enumerate(self.routes):
+            result = route.feasible(model.vehicle)
+            ret_dict[i] = result
+            if result[0] == False:
+                false_list.append(i)
+        return ret_dict, false_list
 
     def get_objective(self, model: Model, penalty: tuple) -> float:
         ret = 0

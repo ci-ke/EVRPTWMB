@@ -17,7 +17,7 @@ class Operation:
             ret_sol.routes[sel[sel_i]].visit[actual_select[sel[sel_i]][0]:actual_select[sel[sel_i]][1]] = solution.routes[sel[(sel_i+1) % len(sel)]].visit[actual_select[sel[(sel_i+1) % len(sel)]][0]:actual_select[sel[(sel_i+1) % len(sel)]][1]]
 
         for route in ret_sol.routes:
-            if len(route.visit) == 2:
+            if route.no_customer():
                 ret_sol.routes.remove(route)
 
         return ret_sol
@@ -30,9 +30,9 @@ class Operation:
         ret_sol.routes[first_which].visit[first_where+1:] = solution.routes[second_which].visit[second_where+1:]
         ret_sol.routes[second_which].visit[second_where+1:] = solution.routes[first_which].visit[first_where+1:]
 
-        if len(ret_sol.routes[first_which].visit) == 2:
+        if ret_sol.routes[first_which].no_customer():
             del ret_sol.routes[first_which]
-        elif len(ret_sol.routes[second_which].visit) == 2:
+        elif ret_sol.routes[second_which].no_customer():
             del ret_sol.routes[second_which]
 
         return ret_sol
@@ -51,7 +51,7 @@ class Operation:
             new_where = random.randint(1, len(solution.routes[new_which].visit)-1)
             ret_sol[new_which].visit.insert(new_where, solution.routes[which].visit[where])
             del ret_sol.routes[which].visit[where]
-            if len(ret_sol.routes[which].visit) == 2:
+            if ret_sol.routes[which].no_customer():
                 del ret_sol.routes[which]
         else:
             choose = list(range(1, len(solution.routes[new_which].visit)))
@@ -131,8 +131,9 @@ class Operation:
             visit_list = solution.routes[select].visit[1:-1]
             random.shuffle(visit_list)
             for node in visit_list:
-                to_route, insert_place_to_route = Operation.choose_best_insert(solution, node, rest_routes_index)
-                solution.routes[to_route].visit.insert(insert_place_to_route, node)
+                if isinstance(node, Customer):
+                    to_route, insert_place_to_route = Operation.choose_best_insert(solution, node, rest_routes_index)
+                    solution.routes[to_route].visit.insert(insert_place_to_route, node)
             del solution.routes[select]
         return solution
 
@@ -147,17 +148,19 @@ class Operation:
                 min_dis = dis
                 min_route = route
         for node in min_route.visit[1:-1]:
-            for route in solution1.routes:
-                if node in route:
-                    route.visit.remove(node)
-                    if len(route) == 2:
-                        solution1.routes.remove(route)
-                    break
+            if isinstance(node, Customer):
+                for route in solution1.routes:
+                    if node in route:
+                        route.visit.remove(node)
+                        if route.no_customer():
+                            solution1.routes.remove(route)
+                        break
         visit_list = min_route.visit[1:-1]
         random.shuffle(visit_list)
         for node in visit_list:
-            to_route, insert_place_to_route = Operation.choose_best_insert(solution1, node, list(range(len(solution1.routes))))
-            solution1.routes[to_route].visit.insert(insert_place_to_route, node)
+            if isinstance(node, Customer):
+                to_route, insert_place_to_route = Operation.choose_best_insert(solution1, node, list(range(len(solution1.routes))))
+                solution1.routes[to_route].visit.insert(insert_place_to_route, node)
         return solution1
 
     @staticmethod
@@ -203,24 +206,36 @@ class Operation:
         return up/down
 
     @staticmethod
+    def find_near_station_between(cus1: Customer, cus2: Customer, model: Model) -> Recharger:
+        min_dis = float('inf')
+        min_station = None
+        for station in model.rechargers:
+            dis = cus1.distance_to(station)+cus2.distance_to(station)
+            if dis < min_dis:
+                min_dis = dis
+                min_station = station
+        return min_station
+
+    @staticmethod
     def charging_modification(solution: Solution, model: Model) -> Solution:
         solution = solution.copy()
 
         for route in solution.routes:
             if route.feasible_weight(model.vehicle) and route.feasible_time(model.vehicle) and not route.feasible_battery(model.vehicle):
                 left_fail_index = np.where(route.arrive_remain_battery < 0)[0][0]
-                right_fail_index = len(route.visit)
-                if route.arrive_remain_battery[-1] < 0:
-                    battery = route.arrive_remain_battery-route.arrive_remain_battery[-1]
-                    right_fail_index = np.where(battery > model.vehicle.max_battery)[0][-1]
                 left = np.where(route.rechargers < left_fail_index)[0]
                 if len(left) != 0:
                     left = left[-1]
                 else:
                     left = 0
-                # left - left_fail, right_fail - end
-                left_insert = list(range(left+1, left_fail_index+1))
-                right_insert = list(range(right_fail_index+1, len(route.visit)))
+                right_over_index = len(route.visit)
+                if route.arrive_remain_battery[-1] < 0:
+                    battery = route.arrive_remain_battery-route.arrive_remain_battery[-1]
+                    right_over_index = np.where(battery > model.vehicle.max_battery)[0][-1]
+                # left - left_fail, right_over - end
+                left_insert = list(range(left+2, left_fail_index+1))
+                assert(len(left_insert) != 0)
+                right_insert = list(range(right_over_index+2, len(route.visit)))
                 common_insert = list(set(left_insert) & set(right_insert))
 
                 if len(model.nearest_station) == 0:
@@ -232,13 +247,13 @@ class Operation:
                     left_choose = []
                     right_choose = []
                     for node_i in left_insert:
-                        left_choose.append((node_i, model.nearest_station[route.visit[node_i]][0]))
+                        left_choose.append((node_i, model.nearest_station[route.visit[node_i-1]][0]))
                     for node_i in right_insert:
-                        right_choose.append((node_i, model.nearest_station[route.visit[node_i]][0]))
+                        right_choose.append((node_i, model.nearest_station[route.visit[node_i-1]][0]))
                     for left in left_choose:
                         for right in right_choose:
                             route.visit.insert(left[0], left[1])
-                            route.visit.insert(right[0]+1, right[1])
+                            route.visit.insert(right[0]+1, right[1])  # 因为左侧插入了一个
                             if route.feasible_battery(model.vehicle):
                                 break
                             else:
@@ -247,10 +262,13 @@ class Operation:
                         else:
                             continue
                         break
+                    else:
+                        route.visit.insert(left_choose[0][0], left_choose[0][1])
+                        route.visit.insert(right_choose[0][0]+1, right_choose[0][1])
                 elif len(common_insert) == 0 and len(right_insert) == 0:
                     choose = []
                     for node_i in left_insert:
-                        choose.append((node_i, model.nearest_station[route.visit[node_i]][0]))
+                        choose.append((node_i, model.nearest_station[route.visit[node_i-1]][0]))
                     for pair in choose:
                         route.visit.insert(pair[0], pair[1])
                         if route.feasible_battery(model.vehicle):
@@ -258,7 +276,7 @@ class Operation:
                         else:
                             del route.visit[pair[0]]
                     else:
-                        route.visit.insert(choose[-1][0], choose[-1][1])
+                        route.visit.insert(choose[0][0], choose[0][1])
                 elif len(common_insert) != 0:
                     common_insert.sort()
                     choose = []
@@ -271,8 +289,23 @@ class Operation:
                         else:
                             del route.visit[pair[0]]
                     else:
-                        route.visit.insert(choose[-1][0], choose[-1][1])
+                        route.visit.insert(choose[0][0], choose[0][1])
                 else:
                     assert('impossible')
         solution.clear_status()
         return solution
+
+    @staticmethod
+    def test_model_feasible(model: Model) -> list:
+        routes = []
+        false_list = []
+        for cus in model.customers:
+            routes.append(Route([model.depot, cus, model.depot]))
+        for route in routes:
+            if not route.feasible_weight(model.vehicle):
+                false_list.append((route.visit[1], 'weight'))
+            if not route.feasible_time(model.vehicle):
+                false_list.append((route.visit[1], 'time'))
+            if not route.feasible_battery(model.vehicle):
+                false_list.append((route.visit[1], 'battery'))
+        return false_list
