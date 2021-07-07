@@ -195,35 +195,35 @@ class Route:
         if self.arrive_load_weight is None:
             self.cal_load_weight(vehicle)
         if True in (self.arrive_load_weight > vehicle.capacity):  # 这里不加括号会有错误，in的优先级高
-            return False
+            return False, np.where(self.arrive_load_weight > vehicle.capacity)[0][0]
         else:
-            return True
+            return True, None
 
-    def feasible_battery(self, vehicle: Vehicle) -> bool:
+    def feasible_battery(self, vehicle: Vehicle) -> tuple:
         if self.arrive_remain_battery is None:
             self.cal_remain_battery(vehicle)
         if True in (self.arrive_remain_battery < 0):
-            return False
+            return False, np.where(self.arrive_remain_battery < 0)[0][0]
         else:
-            return True
+            return True, None
 
-    def feasible_time(self, vehicle: Vehicle) -> bool:
+    def feasible_time(self, vehicle: Vehicle) -> tuple:
         if self.arrive_time is None:
             self.cal_arrive_time(vehicle)
         over_time = np.array([node.over_time for node in self.visit])
         if True in (self.arrive_time > over_time):
-            return False
+            return False, np.where(self.arrive_time > over_time)[0][0]
         else:
-            return True
+            return True, None
 
     def feasible(self, vehicle: Vehicle) -> tuple:
-        if not self.feasible_weight(vehicle):
-            return False, 'capacity'
-        if not self.feasible_time(vehicle):
-            return False, 'time'
-        if not self.feasible_battery(vehicle):
-            return False, 'battery'
-        return True, ''
+        if not self.feasible_weight(vehicle)[0]:
+            return False, 'capacity', self.feasible_weight(vehicle)[1]
+        if not self.feasible_time(vehicle)[0]:
+            return False, 'time', self.feasible_time(vehicle)[1]
+        if not self.feasible_battery(vehicle)[0]:
+            return False, 'battery', self.feasible_battery(vehicle)[1]
+        return True, '', None
 
     def abandoned_feasible(self, vehicle: Vehicle) -> tuple:
         if self.arrive_load_weight is None:
@@ -460,13 +460,11 @@ class Solution:
 
     def feasible_detail(self, model: Model) -> tuple:
         ret_dict = {}
-        false_list = []
         for i, route in enumerate(self.routes):
             result = route.feasible(model.vehicle)
-            ret_dict[i] = result
             if result[0] == False:
-                false_list.append(i)
-        return ret_dict, false_list
+                ret_dict[i] = result
+        return ret_dict
 
     def get_objective(self, model: Model, penalty: tuple) -> float:
         ret = 0
