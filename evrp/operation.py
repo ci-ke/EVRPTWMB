@@ -16,9 +16,12 @@ class Operation:
         for sel_i in range(len(sel)):
             ret_sol.routes[sel[sel_i]].visit[actual_select[sel[sel_i]][0]:actual_select[sel[sel_i]][1]] = solution.routes[sel[(sel_i+1) % len(sel)]].visit[actual_select[sel[(sel_i+1) % len(sel)]][0]:actual_select[sel[(sel_i+1) % len(sel)]][1]]
 
-        for route in ret_sol.routes:
-            if route.no_customer():
-                ret_sol.routes.remove(route)
+        i = 0
+        while i < len(ret_sol.routes):
+            if ret_sol.routes[i].no_customer():
+                del ret_sol.routes[i]
+                continue
+            i += 1
 
         return ret_sol
 
@@ -210,7 +213,7 @@ class Operation:
         min_dis = float('inf')
         min_station = None
         for station in model.rechargers:
-            if station == node1 or station == node2 or (station.x == node1.x and station.y == node1.y) or (station.x == node2.x and station.y == node2.y):
+            if station == node1 or station == node2 or (isinstance(node1, Depot) and station.x == node1.x and station.y == node1.y) or (isinstance(node2, Depot) and station.x == node2.x and station.y == node2.y):
                 continue
             dis = node1.distance_to(station)+node2.distance_to(station)
             if dis < min_dis:
@@ -221,7 +224,7 @@ class Operation:
     @staticmethod
     def charging_modification(solution: Solution, model: Model) -> Solution:
         solution = solution.copy()
-
+        ready_to_remove = []
         for route in solution.routes:
             if route.feasible_weight(model.vehicle)[0] and route.feasible_time(model.vehicle)[0] and not route.feasible_battery(model.vehicle)[0]:
                 left_fail_index = np.where(route.arrive_remain_battery < 0)[0][0]
@@ -236,11 +239,10 @@ class Operation:
                     right_over_index = np.where(battery > model.vehicle.max_battery)[0][-1]
                 # left - left_fail, right_over - end
                 left_insert = list(range(left+1, left_fail_index+1))
-                assert(len(left_insert) != 0)
                 right_insert = list(range(right_over_index+1, len(route.visit)))
                 common_insert = list(set(left_insert) & set(right_insert))
 
-                assert(len(left_insert) != 0)
+                assert len(left_insert) != 0
 
                 if len(common_insert) == 0 and len(right_insert) != 0:
                     left_choose = []
@@ -253,7 +255,8 @@ class Operation:
                         for right in right_choose:
                             route.visit.insert(left[0], left[1])
                             route.visit.insert(right[0]+1, right[1])  # 因为左侧插入了一个
-                            if route.feasible_battery(model.vehicle):
+                            route.clear_status()
+                            if route.feasible_battery(model.vehicle)[0]:
                                 break
                             else:
                                 del route.visit[right[0]+1]
@@ -262,20 +265,36 @@ class Operation:
                             continue
                         break
                     else:
-                        route.visit.insert(random.choice(left_choose)[0], random.choice(left_choose)[1])
-                        route.visit.insert(random.choice(right_choose)[0]+1, random.choice(right_choose)[1])
+                        assert len(route.visit) != 3, "unreasonable model"
+                        cut_point = left_insert[-1]
+                        if cut_point == len(route.visit)-1:
+                            cut_point -= 1
+                        solution.routes.append(Route(route.visit[0:cut_point]+[model.depot]))
+                        assert len(solution[-1].visit) != 2
+                        solution.routes.append(Route([model.depot]+route.visit[cut_point:]))
+                        assert len(solution[-1].visit) != 2
+                        ready_to_remove.append(route)
                 elif len(common_insert) == 0 and len(right_insert) == 0:
                     choose = []
                     for node_i in left_insert:
                         choose.append((node_i, Operation.find_near_station_between(route.visit[node_i], route.visit[node_i-1], model)))
                     for pair in choose:
                         route.visit.insert(pair[0], pair[1])
-                        if route.feasible_battery(model.vehicle):
+                        route.clear_status()
+                        if route.feasible_battery(model.vehicle)[0]:
                             break
                         else:
                             del route.visit[pair[0]]
                     else:
-                        route.visit.insert(random.choice(choose)[0], random.choice(choose)[1])
+                        assert len(route.visit) != 3, "unreasonable model"
+                        cut_point = left_insert[-1]
+                        if cut_point == len(route.visit)-1:
+                            cut_point -= 1
+                        solution.routes.append(Route(route.visit[0:cut_point]+[model.depot]))
+                        assert len(solution[-1].visit) != 2
+                        solution.routes.append(Route([model.depot]+route.visit[cut_point:]))
+                        assert len(solution[-1].visit) != 2
+                        ready_to_remove.append(route)
                 elif len(common_insert) != 0:
                     common_insert.sort()
                     choose = []
@@ -283,15 +302,33 @@ class Operation:
                         choose.append((node_i, Operation.find_near_station_between(route.visit[node_i], route.visit[node_i-1], model)))
                     for pair in choose:
                         route.visit.insert(pair[0], pair[1])
-                        if route.feasible_battery(model.vehicle):
+                        route.clear_status()
+                        if route.feasible_battery(model.vehicle)[0]:
                             break
                         else:
                             del route.visit[pair[0]]
                     else:
-                        route.visit.insert(random.choice(choose)[0], random.choice(choose)[1])
+                        assert len(route.visit) != 3, "unreasonable model"
+                        cut_point = common_insert[-1]
+                        if cut_point == len(route.visit)-1:
+                            cut_point -= 1
+                        solution.routes.append(Route(route.visit[0:cut_point]+[model.depot]))
+                        assert len(solution[-1].visit) != 2
+                        solution.routes.append(Route([model.depot]+route.visit[cut_point:]))
+                        assert len(solution[-1].visit) != 2
+                        ready_to_remove.append(route)
                 else:
-                    assert('impossible')
-        solution.clear_status()
+                    raise Exception('impossible')
+        for route in ready_to_remove:
+            solution.routes.remove(route)
+
+        i = 0
+        while i < len(solution.routes):
+            if solution.routes[i].no_customer():
+                del solution.routes[i]
+                continue
+            i += 1
+
         return solution
 
     def create_test_solution(model: Model) -> Solution:
@@ -299,3 +336,24 @@ class Operation:
         for cus in model.customers:
             routes.append(Route([model.depot, cus, model.depot]))
         return Solution(routes)
+
+    def test_model(model: Model) -> None:
+        S = Operation.create_test_solution(model)
+        print(S)
+        print(S.feasible_detail(model))
+        S = Operation.charging_modification(S, model)
+        print(S)
+        print(S.feasible_detail(model))
+
+    def fix_time(solution: Solution, model: Model) -> Solution:
+        solution = solution.copy()
+
+        for route in solution.routes:
+            if route.feasible_time(model.vehicle)[0] == False:
+                cut = route.feasible_time(model.vehicle)[1]
+                new_route = [model.depot]+route.visit[cut:]
+                route.visit[cut-1:] = [model.depot]
+                route.clear_status()
+                solution.routes.append(Route(new_route))
+
+        return solution

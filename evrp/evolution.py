@@ -29,7 +29,7 @@ class VNS_TS_Evolution:
     def __init__(self, model: Model, **param) -> None:
         self.model = model
         for key, value in param.items():
-            assert(hasattr(self, key))
+            assert hasattr(self, key)
             setattr(self, key, value)
 
     def random_create(self) -> Solution:
@@ -129,13 +129,13 @@ class DEMA_Evolution:
     model = None
     penalty = (15, 5, 10)
     maxiter_evo = 100
-    size = 30
+    size = 10
     cross_prob = 0.7
     infeasible_proportion = 0.25
     sigma = (1, 5, 10)
     theta = 0.5
-    maxiter_tabu_multiply = 4
-    max_neighbour_multiply = 3
+    maxiter_tabu = 10
+    max_neighbour = 10
     tabu_len = 4
     local_search_step = 10
     charge_modify_step = 14
@@ -149,7 +149,7 @@ class DEMA_Evolution:
     def __init__(self, model: Model, **param) -> None:
         self.model = model
         for key, value in param.items():
-            assert(hasattr(self, key))
+            assert hasattr(self, key)
             setattr(self, key, value)
 
     def random_create(self) -> Solution:
@@ -188,7 +188,7 @@ class DEMA_Evolution:
             building_route_visit.insert(decide_insert_place, choose[choose_index])
 
             try_route = Route(building_route_visit)
-            if try_route.feasible_weight(self.model.vehicle) and try_route.feasible_time(self.model.vehicle):
+            if try_route.feasible_weight(self.model.vehicle)[0] and try_route.feasible_time(self.model.vehicle)[0]:
                 # del choose[choose_index]
                 choose_index += 1
             else:
@@ -225,7 +225,17 @@ class DEMA_Evolution:
         population = []
         for _ in range(self.size):
             sol = self.random_create()
-            sol = Operation.charging_modification(sol, self.model)
+            while True:
+                fes_dic = sol.feasible_detail(self.model)
+                for _, value in fes_dic.items():
+                    if value[1] == 'battery':
+                        sol = Operation.charging_modification(sol, self.model)
+                        break
+                    if value[1] == 'time':
+                        sol = Operation.fix_time(sol, self.model)
+                        break
+                else:
+                    break
             population.append(sol)
         return population
 
@@ -310,17 +320,17 @@ class DEMA_Evolution:
         for sol in SP2:
             if len(P) < self.size:
                 P.append(sol)
-        assert(len(P) == self.size)
+        assert len(P) == self.size
         return P
 
     def tabu_search(self, solution: Solution) -> Solution:
         best_sol = solution
         best_val = solution.get_objective(self.model, self.penalty)
         tabu_list = {}
-        for iter in range(int(self.maxiter_tabu_multiply*self.size)):
+        for iter in range(int(self.maxiter_tabu)):
             print('tabu {}'.format(iter))
             actions = []
-            while len(actions) < int(self.max_neighbour_multiply*self.size):
+            while len(actions) < int(self.max_neighbour):
                 act = random.choice(['exchange', 'relocate'])
                 if act == 'exchange':
                     which1, where1, which2, where2 = Operation.exchange_choose(solution)

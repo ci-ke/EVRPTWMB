@@ -39,7 +39,7 @@ class Depot(Node):
 class Customer(Node):
     def __init__(self, id: int, x: float, y: float, demand: float, ready_time: float, over_time: float, service_time: float) -> None:
         super().__init__(id, x, y)
-        assert(over_time >= ready_time)
+        assert over_time >= ready_time
         self.demand = demand
         self.ready_time = ready_time
         self.over_time = over_time
@@ -83,7 +83,7 @@ class Route:
     rechargers = None  # 充电桩索引 向量
 
     def __init__(self, visit: list) -> None:
-        assert(isinstance(visit[0], Depot) and isinstance(visit[-1], Depot))
+        assert isinstance(visit[0], Depot) and isinstance(visit[-1], Depot)
         self.visit = visit
 
     def __str__(self) -> str:
@@ -337,7 +337,7 @@ class Model:
         self.data_file = data_file
         self.file_type = file_type
         for key, value in para.items():
-            assert(hasattr(self, key))
+            assert hasattr(self, key)
             setattr(self, key, value)
 
     def read_data(self) -> None:
@@ -358,7 +358,7 @@ class Model:
                         elif type_ == 'c':
                             self.customers.append(Customer(int(name[1:]), float(x), float(y), float(demand), float(ready_time), float(over_time), float(service_time)))
                     else:
-                        assert('wrong file')
+                        raise Exception('wrong file')
                 else:
                     end_num = float(line[line.find('/')+1:-2])
                     if line[0] == 'Q':
@@ -372,7 +372,7 @@ class Model:
                     elif line[0] == 'v':
                         self.vehicle.velocity = end_num
                     else:
-                        assert('wrong file')
+                        raise Exception('wrong file')
 
     def get_map_bound(self) -> tuple:
         cus_x = [cus.x for cus in self.customers]
@@ -421,8 +421,9 @@ class Solution:
 
     def __str__(self) -> str:
         retstr = 'Solution: {} route{}'.format(len(self.routes), 's' if len(self.routes) != 1 else '')
-        for route in self.routes:
-            retstr += '\n'+' '*4+str(route)
+        for i, route in enumerate(self.routes):
+            #retstr += '\n'+' '*4+str(route)[:5]+'_'+str(i)+str(route)[5:]
+            retstr += '\n    {}_{}{}'.format(str(route)[:5], i, str(route)[5:])
         return retstr
 
     def __getitem__(self, index: int) -> Route:

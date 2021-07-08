@@ -64,6 +64,8 @@ class Util:
 
     @staticmethod
     def pareto_sort(P: list, objv: list, needNum: int = None, needLevel: int = None):
+        if len(objv) <= 1:
+            return P
         objv = np.array(objv)
         levels, criLevel = ea.ndsortESS(objv, needNum, needLevel)
         dis = ea.crowdis(objv, levels)
