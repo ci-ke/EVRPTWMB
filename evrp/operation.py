@@ -70,6 +70,13 @@ class Operation:
                 del ret_sol.routes[which].visit[where]
             else:
                 del ret_sol.routes[which].visit[where+1]
+
+        for route in ret_sol.routes:
+            if isinstance(route.visit[1], Recharger) and route.visit[1].x == route.visit[0].x and route.visit[1].y == route.visit[0].y:
+                del route.visit[1]
+            if isinstance(route.visit[-2], Recharger) and route.visit[-2].x == route.visit[0].x and route.visit[-2].y == route.visit[0].y:
+                del route.visit[-2]
+
         return ret_sol
 
     @staticmethod
@@ -101,6 +108,13 @@ class Operation:
         ret_sol.routes[which1].visit[where1] = solution.routes[which2].visit[where2]
         ret_sol.routes[which2].visit[where2] = solution.routes[which1].visit[where1]
         ret_sol.remove_empty_route()
+
+        for route in ret_sol.routes:
+            if isinstance(route.visit[1], Recharger) and route.visit[1].x == route.visit[0].x and route.visit[1].y == route.visit[0].y:
+                del route.visit[1]
+            if isinstance(route.visit[-2], Recharger) and route.visit[-2].x == route.visit[0].x and route.visit[-2].y == route.visit[0].y:
+                del route.visit[-2]
+
         return ret_sol
 
     @staticmethod
@@ -117,6 +131,7 @@ class Operation:
     def two_opt_action(solution: Solution, which: int, where1: int, where2: int) -> Solution:
         ret_sol = solution.copy()
         ret_sol.routes[which].visit[where1:where2+1] = reversed(solution.routes[which].visit[where1:where2+1])
+
         for route in ret_sol.routes:
             if isinstance(route.visit[1], Recharger) and route.visit[1].x == route.visit[0].x and route.visit[1].y == route.visit[0].y:
                 del route.visit[1]

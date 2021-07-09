@@ -12,6 +12,7 @@ file = 'data/small_evrptw_instances/Cplex10er/c101C10.txt'
 
 model = Model(file, max_vehicle=100)
 model.read_data()
+# model.set_negative_demand(2)
 assert Operation.test_model(model)
 
 evo = DEMA_Evolution(model)

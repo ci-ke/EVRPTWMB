@@ -410,6 +410,11 @@ class Model:
             other_staion.sort(key=lambda rec: station.distance_to(rec))
             self.nearest_station[station] = other_staion
 
+    def set_negative_demand(self, every: int) -> None:
+        for i, cus in enumerate(self.customers):
+            if i % every == every-1:
+                cus.demand = -cus.demand
+
 
 class Solution:
     # 构造属性
