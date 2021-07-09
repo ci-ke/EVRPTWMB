@@ -1,4 +1,5 @@
 import os
+import pickle
 
 from .model import *
 from .util import *
@@ -129,14 +130,14 @@ class VNS_TS_Evolution:
 class DEMA_Evolution:
     # 构造属性
     model = None
-    penalty = (15, 15, 5)
+    penalty = (15, 5, 10)
     maxiter_evo = 100
     size = 30
     infeasible_proportion = 0.25
     sigma = (1, 5, 10)
     theta = 0.7
-    maxiter_tabu = 30
-    max_neighbour = 30
+    maxiter_tabu_mul = 4
+    max_neighbour_mul = 3
     tabu_len = 4
     local_search_step = 10
     charge_modify_step = 14
@@ -330,10 +331,10 @@ class DEMA_Evolution:
         best_sol = solution
         best_val = solution.get_objective(self.model, self.penalty)
         tabu_list = {}
-        for iter in range(int(self.maxiter_tabu)):
+        for iter in range(int(self.maxiter_tabu_mul*len(self.model.customers))):
             print('tabu {} {}'.format(iter, best_val))
             actions = []
-            while len(actions) < int(self.max_neighbour):
+            while len(actions) < int(self.max_neighbour_mul*len(self.model.customers)):
                 act = random.choice(['exchange', 'relocate', 'two-opt'])
                 if act == 'exchange':
                     target = Operation.exchange_choose(solution)
@@ -403,11 +404,11 @@ class DEMA_Evolution:
 
     def update_S(self, P: list) -> tuple:
         for S in P:
-            cost = S.get_objective(self.model, self.penalty)
-            if cost < self.min_cost:
-                if S.feasible(self.model):
-                    self.S_best = S
-                    self.min_cost = cost
+            #cost = S.get_objective(self.model, self.penalty)
+            cost = S.sum_distance()
+            if cost < self.min_cost and S.feasible(self.model):
+                self.S_best = S
+                self.min_cost = cost
 
     def main(self) -> tuple:
         P = self.initialization()
@@ -427,3 +428,7 @@ class DEMA_Evolution:
         output_file = open('result/'+filename+suffix+'.txt', 'a')
         output_file.write(str(self.S_best)+'\n'+str(self.min_cost)+'\n\n')
         output_file.close()
+
+        pickle_file = open('result/'+filename+suffix+'.pickle', 'wb')
+        pickle.dump(self.S_best, pickle_file)
+        pickle_file.close()

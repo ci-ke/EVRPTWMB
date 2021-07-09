@@ -169,7 +169,7 @@ class Route:
         if len(self.rechargers != 0):
             self.cal_remain_battery(vehicle)
             for i in self.rechargers:
-                service_time[i] += (vehicle.max_battery-self.arrive_remain_battery[i])/vehicle.charge_speed
+                service_time[i] += (vehicle.max_battery-self.arrive_remain_battery[i])*vehicle.charge_speed
         arrive_service_time = np.cumsum(service_time)
         arrive_before_service_time = np.zeros(len(self.visit))
         arrive_before_service_time[1:] = arrive_service_time[:-1]
