@@ -480,3 +480,11 @@ class Solution:
     def addVehicle(self, model: Model) -> None:
         if len(self.routes) < model.max_vehicle:
             self.routes.append(Route([self.routes[0].visit[0], self.routes[0].visit[0]]))
+
+    def remove_empty_route(self) -> None:
+        i = 0
+        while i < len(self.routes):
+            if self.routes[i].no_customer():
+                del self.routes[i]
+                continue
+            i += 1

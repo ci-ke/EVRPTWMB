@@ -1,4 +1,3 @@
-from numpy.lib.utils import source
 from .model import *
 from .util import *
 
@@ -17,12 +16,7 @@ class Operation:
         for sel_i in range(len(sel)):
             ret_sol.routes[sel[sel_i]].visit[actual_select[sel[sel_i]][0]:actual_select[sel[sel_i]][1]] = solution.routes[sel[(sel_i+1) % len(sel)]].visit[actual_select[sel[(sel_i+1) % len(sel)]][0]:actual_select[sel[(sel_i+1) % len(sel)]][1]]
 
-        i = 0
-        while i < len(ret_sol.routes):
-            if ret_sol.routes[i].no_customer():
-                del ret_sol.routes[i]
-                continue
-            i += 1
+        ret_sol.remove_empty_route()
 
         return ret_sol
 
@@ -78,34 +72,6 @@ class Operation:
                 del ret_sol.routes[which].visit[where+1]
         return ret_sol
 
-    # @staticmethod
-    # def relocate(solution: Solution, which: int, where: int) -> Solution:
-    #    assert where >= 1 and where <= len(solution.routes[which].visit)-2
-    #    if len(solution.routes[which].visit) > 3:
-    #        new_which = random.randint(0, len(solution.routes)-1)
-    #    else:
-    #        choose = list(range(len(solution.routes)))
-    #        choose.remove(which)
-    #        new_which = random.choice(choose)
-    #    ret_sol = solution.copy()
-    #    if new_which != which:
-    #        new_where = random.randint(1, len(solution.routes[new_which].visit)-1)
-    #        ret_sol[new_which].visit.insert(new_where, solution.routes[which].visit[where])
-    #        del ret_sol.routes[which].visit[where]
-    #        if ret_sol.routes[which].no_customer():
-    #            del ret_sol.routes[which]
-    #    else:
-    #        choose = list(range(1, len(solution.routes[new_which].visit)))
-    #        choose.remove(where)
-    #        choose.remove(where+1)
-    #        new_where = random.choice(choose)
-    #        ret_sol[which].visit.insert(new_where, solution.routes[which].visit[where])
-    #        if new_where > where:
-    #            del ret_sol.routes[which].visit[where]
-    #        else:
-    #            del ret_sol.routes[which].visit[where+1]
-    #    return ret_sol
-
     @staticmethod
     def exchange_choose(solution: Solution) -> tuple:
         while True:
@@ -134,18 +100,29 @@ class Operation:
         ret_sol = solution.copy()
         ret_sol.routes[which1].visit[where1] = solution.routes[which2].visit[where2]
         ret_sol.routes[which2].visit[where2] = solution.routes[which1].visit[where1]
+        ret_sol.remove_empty_route()
         return ret_sol
 
     @staticmethod
     def two_opt_choose(solution: Solution) -> tuple:
         which = random.randint(0, len(solution.routes)-1)
+        while len(solution.routes[which].visit) < 5:
+            which = random.randint(0, len(solution.routes)-1)
         where1, where2 = random.sample(range(1, len(solution.routes[which].visit)-1), 2)
+        while where2-where1 < 2:
+            where1, where2 = random.sample(range(1, len(solution.routes[which].visit)-1), 2)
         return which, where1, where2
 
     @staticmethod
     def two_opt_action(solution: Solution, which: int, where1: int, where2: int) -> Solution:
         ret_sol = solution.copy()
         ret_sol.routes[which].visit[where1:where2+1] = reversed(solution.routes[which].visit[where1:where2+1])
+        for route in ret_sol.routes:
+            if isinstance(route.visit[1], Recharger) and route.visit[1].x == route.visit[0].x and route.visit[1].y == route.visit[0].y:
+                del route.visit[1]
+            if isinstance(route.visit[-2], Recharger) and route.visit[-2].x == route.visit[0].x and route.visit[-2].y == route.visit[0].y:
+                del route.visit[-2]
+
         return ret_sol
 
     @staticmethod
@@ -204,8 +181,6 @@ class Operation:
                 for route in solution1.routes:
                     if node in route:
                         route.visit.remove(node)
-                        if route.no_customer():
-                            solution1.routes.remove(route)
                         break
         visit_list = solution2.routes[select].visit[1:-1]
         random.shuffle(visit_list)
@@ -213,6 +188,7 @@ class Operation:
             if isinstance(node, Customer):
                 to_route, insert_place_to_route = Operation.choose_best_insert(solution1, node, list(range(len(solution1.routes))))
                 solution1.routes[to_route].visit.insert(insert_place_to_route, node)
+        solution1.remove_empty_route()
         solution1.clear_status()
         return solution1
 
@@ -372,12 +348,7 @@ class Operation:
         for route in ready_to_remove:
             solution.routes.remove(route)
 
-        i = 0
-        while i < len(solution.routes):
-            if solution.routes[i].no_customer():
-                del solution.routes[i]
-                continue
-            i += 1
+        solution.remove_empty_route()
 
         return solution
 
@@ -409,5 +380,7 @@ class Operation:
                 route.visit[cut-1:] = [model.depot]
                 route.clear_status()
                 solution.routes.append(Route(new_route))
+
+        solution.remove_empty_route()
 
         return solution

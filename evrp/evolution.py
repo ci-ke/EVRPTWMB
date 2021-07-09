@@ -332,7 +332,7 @@ class DEMA_Evolution:
             print('tabu {} {}'.format(iter, best_val))
             actions = []
             while len(actions) < int(self.max_neighbour):
-                act = random.choice(['exchange', 'relocate'])
+                act = random.choice(['exchange', 'relocate', 'two-opt'])
                 if act == 'exchange':
                     target = Operation.exchange_choose(solution)
                     if ('exchange', *target) not in actions:
@@ -344,7 +344,7 @@ class DEMA_Evolution:
                 elif act == 'two-opt':
                     target = Operation.two_opt_choose(solution)
                     if ('two-opt', *target) not in actions:
-                        actions.append('two-opt', *target)
+                        actions.append(('two-opt', *target))
             local_best_sol = None
             local_best_val = float('inf')
             local_best_action = None
@@ -421,10 +421,5 @@ class DEMA_Evolution:
     def output_to_file(self, suffix: str = '') -> None:
         filename = self.model.data_file.split('/')[-1].split('.')[0]
         output_file = open('result/'+filename+suffix+'.txt', 'a')
-        output_file.write(str(self.S_best)+'\n'+str(self.min_cost)+'\n')
-        feasible = self.S_best.feasible_detail(self.model)
-        if len(feasible) == 0:
-            output_file.write('feasible\n\n')
-        else:
-            output_file.write(str(feasible)+'\n\n')
+        output_file.write(str(self.S_best)+'\n'+str(self.min_cost)+'\n\n')
         output_file.close()
