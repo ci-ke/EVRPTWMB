@@ -320,6 +320,13 @@ class Route:
                     return False
             return True
 
+    def remove_successive_recharger(self) -> None:
+        i = 1
+        while i < len(self.visit)-1:
+            if isinstance(self.visit[i], Recharger) and isinstance(self.visit[i-1], Recharger) and self.visit[i].id == self.visit[i-1].id:
+                del self.visit[i]
+            i += 1
+
 
 class Model:
     # 构造属性

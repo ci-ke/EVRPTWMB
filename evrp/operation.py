@@ -1,3 +1,4 @@
+import enum
 from .model import *
 from .util import *
 
@@ -77,6 +78,9 @@ class Operation:
             if isinstance(route.visit[-2], Recharger) and route.visit[-2].x == route.visit[0].x and route.visit[-2].y == route.visit[0].y:
                 del route.visit[-2]
 
+        for route in ret_sol:
+            route.remove_successive_recharger()
+
         return ret_sol
 
     @staticmethod
@@ -115,6 +119,9 @@ class Operation:
             if isinstance(route.visit[-2], Recharger) and route.visit[-2].x == route.visit[0].x and route.visit[-2].y == route.visit[0].y:
                 del route.visit[-2]
 
+        for route in ret_sol:
+            route.remove_successive_recharger()
+
         return ret_sol
 
     @staticmethod
@@ -137,6 +144,8 @@ class Operation:
                 del route.visit[1]
             if isinstance(route.visit[-2], Recharger) and route.visit[-2].x == route.visit[0].x and route.visit[-2].y == route.visit[0].y:
                 del route.visit[-2]
+
+        ret_sol.routes[which].remove_successive_recharger()
 
         return ret_sol
 
