@@ -127,14 +127,14 @@ class VNS_TS_Evolution:
 class DEMA_Evolution:
     # 构造属性
     model = None
-    penalty = (15, 5, 10)
+    penalty = (15, 15, 5)
     maxiter_evo = 100
-    size = 10
+    size = 30
     infeasible_proportion = 0.25
     sigma = (1, 5, 10)
     theta = 0.7
-    maxiter_tabu = 10
-    max_neighbour = 10
+    maxiter_tabu = 30
+    max_neighbour = 30
     tabu_len = 4
     local_search_step = 10
     charge_modify_step = 14
@@ -144,6 +144,8 @@ class DEMA_Evolution:
     cross_weigh = [0.0, 0.0]
     last_local_search = 0
     last_charge_modify = 0
+    S_best = None
+    min_cost = float('inf')
 
     def __init__(self, model: Model, **param) -> None:
         self.model = model
@@ -327,7 +329,7 @@ class DEMA_Evolution:
         best_val = solution.get_objective(self.model, self.penalty)
         tabu_list = {}
         for iter in range(int(self.maxiter_tabu)):
-            print('tabu {}'.format(iter))
+            print('tabu {} {}'.format(iter, best_val))
             actions = []
             while len(actions) < int(self.max_neighbour):
                 act = random.choice(['exchange', 'relocate'])
@@ -397,23 +399,32 @@ class DEMA_Evolution:
             return retP
         return P
 
-    def update_S(self, P: list, S_best: Solution, cost: float) -> tuple:
-        min_cost = cost
-        S_best = S_best
+    def update_S(self, P: list) -> tuple:
         for S in P:
             cost = S.get_objective(self.model, self.penalty)
-            if cost < min_cost:
-                S_best = S
-                min_cost = cost
-        return S_best, min_cost
+            if cost < self.min_cost:
+                if S.feasible(self.model):
+                    self.S_best = S
+                    self.min_cost = cost
 
     def main(self) -> tuple:
         P = self.initialization()
-        S_best, min_cost = self.update_S(P, None, float('inf'))
+        self.update_S(P)
         for iter in range(self.maxiter_evo):
-            print(iter, min_cost)
+            print(iter, self.min_cost)
             P_child = self.ACO_GM(P)
             P = self.ISSD(P+P_child, iter)
             P = self.MVS(P, iter)
-            S_best, min_cost = self.update_S(P, S_best, min_cost)
-        return S_best, min_cost
+            self.update_S(P)
+        return self.S_best, self.min_cost
+
+    def output_to_file(self, suffix: str = '') -> None:
+        filename = self.model.data_file.split('/')[-1].split('.')[0]
+        output_file = open('result/'+filename+suffix+'.txt', 'a')
+        output_file.write(str(self.S_best)+'\n'+str(self.min_cost)+'\n')
+        feasible = self.S_best.feasible_detail(self.model)
+        if len(feasible) == 0:
+            output_file.write('feasible\n\n')
+        else:
+            output_file.write(str(feasible)+'\n\n')
+        output_file.close()
