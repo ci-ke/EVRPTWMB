@@ -1,3 +1,5 @@
+import os
+
 from .model import *
 from .util import *
 from .operation import *
@@ -419,6 +421,8 @@ class DEMA_Evolution:
         return self.S_best, self.min_cost
 
     def output_to_file(self, suffix: str = '') -> None:
+        if not os.path.exists('result'):
+            os.mkdir('result')
         filename = self.model.data_file.split('/')[-1].split('.')[0]
         output_file = open('result/'+filename+suffix+'.txt', 'a')
         output_file.write(str(self.S_best)+'\n'+str(self.min_cost)+'\n\n')
