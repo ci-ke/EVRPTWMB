@@ -1,3 +1,4 @@
+from numpy.lib.utils import source
 from .model import *
 from .util import *
 
@@ -26,7 +27,7 @@ class Operation:
         return ret_sol
 
     @staticmethod
-    def two_opt(solution: Solution, first_which: int, first_where: int, second_which: int, second_where: int) -> Solution:
+    def two_opt_star_action(solution: Solution, first_which: int, first_where: int, second_which: int, second_where: int) -> Solution:
         assert first_where >= 0 and first_where <= len(solution.routes[first_which].visit)-2
         assert second_where >= 0 and second_where <= len(solution.routes[second_which].visit)-2
         ret_sol = solution.copy()
@@ -41,32 +42,69 @@ class Operation:
         return ret_sol
 
     @staticmethod
-    def relocate(solution: Solution, which: int, where: int) -> Solution:
-        assert where >= 1 and where <= len(solution.routes[which].visit)-2
+    def relocate_choose(solution: Solution) -> tuple:
+        which = random.randint(0, len(solution.routes)-1)
+        where = random.randint(1, len(solution.routes[which].visit)-2)
         if len(solution.routes[which].visit) > 3:
             new_which = random.randint(0, len(solution.routes)-1)
         else:
             choose = list(range(len(solution.routes)))
             choose.remove(which)
             new_which = random.choice(choose)
-        ret_sol = solution.copy()
+
         if new_which != which:
             new_where = random.randint(1, len(solution.routes[new_which].visit)-1)
-            ret_sol[new_which].visit.insert(new_where, solution.routes[which].visit[where])
-            del ret_sol.routes[which].visit[where]
-            if ret_sol.routes[which].no_customer():
-                del ret_sol.routes[which]
         else:
             choose = list(range(1, len(solution.routes[new_which].visit)))
             choose.remove(where)
             choose.remove(where+1)
             new_where = random.choice(choose)
+
+        return which, where, new_which, new_where
+
+    @staticmethod
+    def relocate_action(solution: Solution, which: int, where: int, new_which: int, new_where: int) -> Solution:
+        ret_sol = solution.copy()
+        if new_which != which:
+            ret_sol[new_which].visit.insert(new_where, solution.routes[which].visit[where])
+            del ret_sol.routes[which].visit[where]
+            if ret_sol.routes[which].no_customer():
+                del ret_sol.routes[which]
+        else:
             ret_sol[which].visit.insert(new_where, solution.routes[which].visit[where])
             if new_where > where:
                 del ret_sol.routes[which].visit[where]
             else:
                 del ret_sol.routes[which].visit[where+1]
         return ret_sol
+
+    # @staticmethod
+    # def relocate(solution: Solution, which: int, where: int) -> Solution:
+    #    assert where >= 1 and where <= len(solution.routes[which].visit)-2
+    #    if len(solution.routes[which].visit) > 3:
+    #        new_which = random.randint(0, len(solution.routes)-1)
+    #    else:
+    #        choose = list(range(len(solution.routes)))
+    #        choose.remove(which)
+    #        new_which = random.choice(choose)
+    #    ret_sol = solution.copy()
+    #    if new_which != which:
+    #        new_where = random.randint(1, len(solution.routes[new_which].visit)-1)
+    #        ret_sol[new_which].visit.insert(new_where, solution.routes[which].visit[where])
+    #        del ret_sol.routes[which].visit[where]
+    #        if ret_sol.routes[which].no_customer():
+    #            del ret_sol.routes[which]
+    #    else:
+    #        choose = list(range(1, len(solution.routes[new_which].visit)))
+    #        choose.remove(where)
+    #        choose.remove(where+1)
+    #        new_where = random.choice(choose)
+    #        ret_sol[which].visit.insert(new_where, solution.routes[which].visit[where])
+    #        if new_where > where:
+    #            del ret_sol.routes[which].visit[where]
+    #        else:
+    #            del ret_sol.routes[which].visit[where+1]
+    #    return ret_sol
 
     @staticmethod
     def exchange_choose(solution: Solution) -> tuple:
@@ -96,6 +134,18 @@ class Operation:
         ret_sol = solution.copy()
         ret_sol.routes[which1].visit[where1] = solution.routes[which2].visit[where2]
         ret_sol.routes[which2].visit[where2] = solution.routes[which1].visit[where1]
+        return ret_sol
+
+    @staticmethod
+    def two_opt_choose(solution: Solution) -> tuple:
+        which = random.randint(0, len(solution.routes)-1)
+        where1, where2 = random.sample(range(1, len(solution.routes[which].visit)-1), 2)
+        return which, where1, where2
+
+    @staticmethod
+    def two_opt_action(solution: Solution, which: int, where1: int, where2: int) -> Solution:
+        ret_sol = solution.copy()
+        ret_sol.routes[which].visit[where1:where2+1] = reversed(solution.routes[which].visit[where1:where2+1])
         return ret_sol
 
     @staticmethod
@@ -138,19 +188,18 @@ class Operation:
                     to_route, insert_place_to_route = Operation.choose_best_insert(solution, node, rest_routes_index)
                     solution.routes[to_route].visit.insert(insert_place_to_route, node)
             del solution.routes[select]
+        solution.clear_status()
         return solution
 
     @staticmethod
     def ACO_GM_cross2(solution1: Solution, solution2: Solution) -> Solution:
         solution1 = solution1.copy()
-        min_dis = float('inf')
-        min_route = None
-        for route in solution2.routes:
-            dis = route.sum_distance()
-            if dis < min_dis:
-                min_dis = dis
-                min_route = route
-        for node in min_route.visit[1:-1]:
+        avg_dis_reciprocal = np.zeros(len(solution2.routes), dtype=float)
+        for i, route in enumerate(solution2.routes):
+            avg_dis_reciprocal[i] = 1/route.avg_distance()
+        avg_dis_reciprocal = avg_dis_reciprocal/np.sum(avg_dis_reciprocal)
+        select = Util.wheel_select(avg_dis_reciprocal)
+        for node in solution2.routes[select].visit[1:-1]:
             if isinstance(node, Customer):
                 for route in solution1.routes:
                     if node in route:
@@ -158,12 +207,13 @@ class Operation:
                         if route.no_customer():
                             solution1.routes.remove(route)
                         break
-        visit_list = min_route.visit[1:-1]
+        visit_list = solution2.routes[select].visit[1:-1]
         random.shuffle(visit_list)
         for node in visit_list:
             if isinstance(node, Customer):
                 to_route, insert_place_to_route = Operation.choose_best_insert(solution1, node, list(range(len(solution1.routes))))
                 solution1.routes[to_route].visit.insert(insert_place_to_route, node)
+        solution1.clear_status()
         return solution1
 
     @staticmethod
@@ -189,24 +239,24 @@ class Operation:
             sum += Operation.overlapping_degree(solution, p)
         return sum/len(population)
 
-    @staticmethod
-    def similarity_degree(solution: Solution, population: list) -> float:
-        solarcs = []
-        for route in solution.routes:
-            for i in range(len(route.visit)-1):
-                solarcs.append((route.visit[i], route.visit[i+1]))
-        poparcs = []
-        for popsol in population:
-            for route in popsol.routes:
-                for i in range(len(route.visit)-1):
-                    poparcs.append((route.visit[i], route.visit[i+1]))
-        up = 0
-        down = 0
-        for arc in solarcs:
-            if arc in poparcs:
-                down += 1
-                up += poparcs.count(arc)
-        return up/down
+    # @staticmethod
+    # def similarity_degree(solution: Solution, population: list) -> float:
+    #    solarcs = []
+    #    for route in solution.routes:
+    #        for i in range(len(route.visit)-1):
+    #            solarcs.append((route.visit[i], route.visit[i+1]))
+    #    poparcs = []
+    #    for popsol in population:
+    #        for route in popsol.routes:
+    #            for i in range(len(route.visit)-1):
+    #                poparcs.append((route.visit[i], route.visit[i+1]))
+    #    up = 0
+    #    down = 0
+    #    for arc in solarcs:
+    #        if arc in poparcs:
+    #            down += 1
+    #            up += poparcs.count(arc)
+    #    return up/down
 
     @staticmethod
     def find_near_station_between(node1: Node, node2: Node, model: Model) -> Recharger:
@@ -337,13 +387,17 @@ class Operation:
             routes.append(Route([model.depot, cus, model.depot]))
         return Solution(routes)
 
-    def test_model(model: Model) -> None:
+    def test_model(model: Model) -> bool:
         S = Operation.create_test_solution(model)
-        print(S)
-        print(S.feasible_detail(model))
+        result = S.feasible_detail(model)
+        for value in result.values():
+            if value[1] != 'battery':
+                return False
         S = Operation.charging_modification(S, model)
-        print(S)
-        print(S.feasible_detail(model))
+        result = S.feasible_detail(model)
+        if len(result) != 0:
+            return False
+        return True
 
     def fix_time(solution: Solution, model: Model) -> Solution:
         solution = solution.copy()

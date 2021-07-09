@@ -130,10 +130,9 @@ class DEMA_Evolution:
     penalty = (15, 5, 10)
     maxiter_evo = 100
     size = 10
-    cross_prob = 0.7
     infeasible_proportion = 0.25
     sigma = (1, 5, 10)
-    theta = 0.5
+    theta = 0.7
     maxiter_tabu = 10
     max_neighbour = 10
     tabu_len = 4
@@ -305,9 +304,9 @@ class DEMA_Evolution:
         SP1.sort(key=lambda sol: sol.get_objective(self.model, self.penalty))
         obj_value = []
         for sol in SP2:
-            similarity_degree = Operation.similarity_degree(sol, P)
+            overlapping_degree = Operation.overlapping_degree_population(sol, P)
             objective = sol.get_objective(self.model, self.penalty)
-            obj_value.append([objective, similarity_degree])
+            obj_value.append([objective, overlapping_degree])
         SP2 = Util.pareto_sort(SP2, obj_value)
         sp1up = int((iter/self.maxiter_evo)*self.size)
         sp2up = self.size-sp1up
@@ -333,47 +332,49 @@ class DEMA_Evolution:
             while len(actions) < int(self.max_neighbour):
                 act = random.choice(['exchange', 'relocate'])
                 if act == 'exchange':
-                    which1, where1, which2, where2 = Operation.exchange_choose(solution)
-                    if ('exchange', which1, where1, which2, where2) not in actions:
-                        actions.append(('exchange', which1, where1, which2, where2))
-                else:
-                    which = random.randint(0, len(solution.routes)-1)
-                    where = random.randint(1, len(solution.routes[which].visit)-2)
-                    if ('relocate', which, where) not in actions:
-                        actions.append(('relocate', which, where))
+                    target = Operation.exchange_choose(solution)
+                    if ('exchange', *target) not in actions:
+                        actions.append(('exchange', *target))
+                elif act == 'relocate':
+                    target = Operation.relocate_choose(solution)
+                    if ('relocate', *target) not in actions:
+                        actions.append(('relocate', *target))
+                elif act == 'two-opt':
+                    target = Operation.two_opt_choose(solution)
+                    if ('two-opt', *target) not in actions:
+                        actions.append('two-opt', *target)
             local_best_sol = None
             local_best_val = float('inf')
             local_best_action = None
             for action in actions:
-                if action[0] == 'exchange':
-                    tabu_status = tabu_list.get((action[0], solution.routes[action[1]].visit[action[2]], solution.routes[action[3]].visit[action[4]]), 0)
-                    if tabu_status == 0:
+                tabu_status = tabu_list.get(action, 0)
+                if tabu_status == 0:
+                    if action[0] == 'exchange':
                         try_sol = Operation.exchange_action(solution, *action[1:])
-                        try_val = try_sol.get_objective(self.model, self.penalty)
-                        if try_val < local_best_val:
-                            local_best_sol = try_sol
-                            local_best_val = try_val
-                            local_best_action = action
-                else:
-                    tabu_status = tabu_list.get((action[0], solution.routes[action[1]].visit[action[2]]), 0)
-                    if tabu_status == 0:
-                        try_sol = Operation.relocate(solution, *action[1:])
-                        try_val = try_sol.get_objective(self.model, self.penalty)
-                        if try_val < local_best_val:
-                            local_best_sol = try_sol
-                            local_best_val = try_val
-                            local_best_action = action
+                    elif action[0] == 'relocate':
+                        try_sol = Operation.relocate_action(solution, *action[1:])
+                    elif action[0] == 'two-opt':
+                        try_sol = Operation.two_opt_action(solution, *action[1:])
+                    try_val = try_sol.get_objective(self.model, self.penalty)
+                    if try_val < local_best_val:
+                        local_best_sol = try_sol
+                        local_best_val = try_val
+                        local_best_action = action
             for key in tabu_list:
                 if tabu_list[key] > 0:
                     tabu_list[key] -= 1
             if local_best_action[0] == 'exchange':
-                tabu_list[('exchange', solution.routes[local_best_action[1]].visit[local_best_action[2]], solution.routes[local_best_action[3]].visit[local_best_action[4]])] = self.tabu_len
-                tabu_list[('exchange', solution.routes[local_best_action[3]].visit[local_best_action[4]], solution.routes[local_best_action[1]].visit[local_best_action[2]])] = self.tabu_len
-            else:
-                tabu_list[('relocate', solution.routes[local_best_action[1]].visit[local_best_action[2]])] = self.tabu_len
+                tabu_list[('exchange', *local_best_action[1:])] = self.tabu_len
+                tabu_list[('exchange', *local_best_action[3:5], *local_best_action[1:3])] = self.tabu_len
+            elif local_best_action[0] == 'relocate':
+                tabu_list[('relocate', *local_best_action[1:])] = self.tabu_len
+            elif local_best_action[0] == 'two-opt':
+                tabu_list[('two-opt', *local_best_action[1:])] = self.tabu_len
+                tabu_list[('two-opt', local_best_action[1], local_best_action[3], local_best_action[2])] = self.tabu_len
             if local_best_val < best_val:
                 best_sol = local_best_sol
                 best_val = local_best_val
+            solution = local_best_sol
 
         return best_sol
 
@@ -390,7 +391,7 @@ class DEMA_Evolution:
         elif self.last_charge_modify >= self.charge_modify_step:
             retP = []
             for i, sol in enumerate(P):
-                print(iter, i)
+                print(iter, 'charge', i)
                 retP.append(Operation.charging_modification(sol, self.model))
             self.last_charge_modify = 0
             return retP
