@@ -150,7 +150,7 @@ class Operation:
         return ret_sol
 
     @staticmethod
-    def stationInRe(solution: Solution) -> Solution:
+    def stationInRe_action(solution: Solution, which: int, where: int) -> Solution:
         return solution
 
     def choose_best_insert(solution: Solution, node: Node, route_indexes: list) -> tuple:

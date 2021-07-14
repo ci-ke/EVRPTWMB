@@ -1,5 +1,6 @@
 import os
 import pickle
+import collections
 
 from .model import *
 from .util import *
@@ -142,9 +143,6 @@ class DEMA_Evolution:
     local_search_step = 10
     charge_modify_step = 14
     # 状态属性
-    cross_score = [0.0, 0.0]
-    cross_call_times = [0, 0]
-    cross_weigh = [0.0, 0.0]
     last_local_search = 0
     last_charge_modify = 0
     S_best = None
@@ -244,6 +242,10 @@ class DEMA_Evolution:
         return population
 
     def ACO_GM(self, P: list) -> list:
+        cross_score = [0.0, 0.0]
+        cross_call_times = [0, 0]
+        cross_weigh = [0.0, 0.0]
+
         fes_P = []
         infes_P = []
         for sol in P:
@@ -266,16 +268,18 @@ class DEMA_Evolution:
         for i in choose:
             P_parent.append(P[i])
         P_child = []
+        all_cost = [sol.get_objective(self.model, self.penalty) for sol in P]
         while len(P_child) < self.size:
+            if len(P_child) == int((1-self.infeasible_proportion)*self.size):
+                penalty_save = self.penalty
+                self.penalty = (0, 0, 0)
             for i in range(2):
-                if self.cross_call_times[i] == 0:
-                    self.cross_weigh[i] = self.cross_weigh[i]
-                else:
-                    self.cross_weigh[i] = self.theta*np.pi/self.cross_call_times[i]+(1-self.theta)*self.cross_weigh[i]
-            if self.cross_weigh[0] == 0 and self.cross_weigh[1] == 0:
+                if cross_call_times[i] != 0:
+                    cross_weigh[i] = self.theta*np.pi/cross_call_times[i]+(1-self.theta)*cross_weigh[i]
+            if cross_weigh[0] == 0 and cross_weigh[1] == 0:
                 sel_prob = np.array([0.5, 0.5])
             else:
-                sel_prob = np.array(self.cross_weigh)/np.sum(np.array(self.cross_weigh))
+                sel_prob = np.array(cross_weigh)/np.sum(np.array(cross_weigh))
             sel = Util.wheel_select(sel_prob)
 
             if sel == 0:
@@ -285,17 +289,18 @@ class DEMA_Evolution:
                 S_parent, S2 = random.sample(P_parent, 2)
                 S = Operation.ACO_GM_cross2(S_parent, S2)
 
-            self.cross_call_times[sel] += 1
+            cross_call_times[sel] += 1
             cost = S.get_objective(self.model, self.penalty)
-            all_cost = [sol.get_objective(self.model, self.penalty) for sol in P]
             if cost < all(all_cost):
-                self.cross_score[sel] += self.sigma[0]
+                cross_score[sel] += self.sigma[0]
             elif cost < S_parent.get_objective(self.model, self.penalty):
-                self.cross_score[sel] += self.sigma[1]
+                cross_score[sel] += self.sigma[1]
             else:
-                self.cross_score[sel] += self.sigma[2]
+                cross_score[sel] += self.sigma[2]
 
             P_child.append(S)
+
+        self.penalty = penalty_save
         return P_child
 
     def ISSD(self, P: list, iter: int) -> list:
@@ -325,12 +330,17 @@ class DEMA_Evolution:
             if len(P) < self.size:
                 P.append(sol)
         assert len(P) == self.size
+
+        for sol in P:
+            sol.clear_status()
+
         return P
 
     def tabu_search(self, solution: Solution) -> Solution:
         best_sol = solution
         best_val = solution.get_objective(self.model, self.penalty)
         tabu_list = {}
+        #delta = collections.deque([float('inf')]*10, maxlen=10)
         for iter in range(int(self.maxiter_tabu_mul*len(self.model.customers))):
             print('tabu {} {}'.format(iter, best_val))
             actions = []
@@ -348,9 +358,9 @@ class DEMA_Evolution:
                     target = Operation.two_opt_choose(solution)
                     if ('two-opt', *target) not in actions:
                         actions.append(('two-opt', *target))
-            local_best_sol = None
-            local_best_val = float('inf')
-            local_best_action = None
+            local_best_sol = solution
+            local_best_val = solution.get_objective(self.model, self.penalty)
+            local_best_action = (None,)
             for action in actions:
                 tabu_status = tabu_list.get(action, 0)
                 if tabu_status == 0:
@@ -379,7 +389,17 @@ class DEMA_Evolution:
             if local_best_val < best_val:
                 best_sol = local_best_sol
                 best_val = local_best_val
+
             solution = local_best_sol
+
+            #delta.append(solution.get_objective(self.model, self.penalty)-local_best_val)
+            #should_break = True
+            # for i in delta:
+            #    if i > 0.00001:
+            #        should_break = False
+            #    break
+            # if should_break:
+            #    break
 
         return best_sol
 
@@ -404,11 +424,20 @@ class DEMA_Evolution:
 
     def update_S(self, P: list) -> tuple:
         for S in P:
-            #cost = S.get_objective(self.model, self.penalty)
-            cost = S.sum_distance()
-            if cost < self.min_cost and S.feasible(self.model):
-                self.S_best = S
-                self.min_cost = cost
+            if S.feasible(self.model):
+                cost = S.get_objective(self.model, self.penalty)
+                num = len(S.routes)
+                #cost = S.sum_distance()
+                if self.S_best is None:
+                    self.S_best = S
+                    self.min_cost = cost
+                elif not self.S_best is None and num < len(self.S_best.routes):
+                    self.S_best = S
+                    self.min_cost = cost
+                elif not self.S_best is None and num == len(self.S_best.routes):
+                    if cost < self.min_cost:
+                        self.S_best = S
+                        self.min_cost = cost
 
     def main(self) -> tuple:
         P = self.initialization()

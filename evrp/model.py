@@ -426,6 +426,8 @@ class Model:
 class Solution:
     # 构造属性
     routes = []
+    # 状态属性
+    objective = 0.0
 
     def __init__(self, routes: list) -> None:
         assert isinstance(routes[0], Route)
@@ -480,12 +482,17 @@ class Solution:
         return ret_dict
 
     def get_objective(self, model: Model, penalty: tuple) -> float:
-        ret = 0
-        for route in self.routes:
-            ret += route.get_objective(model.vehicle, penalty)
-        return ret
+        if self.objective == 0:
+            ret = 0
+            for route in self.routes:
+                ret += route.get_objective(model.vehicle, penalty)
+            self.objective = ret
+            return ret
+        else:
+            return self.objective
 
     def clear_status(self) -> None:
+        self.objective = 0
         for route in self.routes:
             route.clear_status()
 
