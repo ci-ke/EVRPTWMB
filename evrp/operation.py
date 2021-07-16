@@ -150,8 +150,23 @@ class Operation:
         return ret_sol
 
     @staticmethod
-    def stationInRe_action(solution: Solution, which: int, where: int) -> Solution:
-        return solution
+    def stationInRe_choose(solution: Solution, model: Model) -> tuple:
+        which = random.randint(0, len(solution.routes)-1)
+        where = random.randint(1, len(solution.routes[which].visit)-2)
+        while not isinstance(solution.routes[which].visit[where], Customer):
+            which = random.randint(0, len(solution.routes)-1)
+            where = random.randint(1, len(solution.routes[which].visit)-2)
+        recharger = random.choice(model.rechargers)
+        return recharger, which, where
+
+    @staticmethod
+    def stationInRe_action(solution: Solution, recharger: Recharger, which: int, where: int) -> Solution:
+        ret_sol = solution.copy()
+        if ret_sol.routes[which].visit[where-1] is recharger:
+            del ret_sol.routes[which].visit[where-1]
+        else:
+            ret_sol.routes[which].visit.insert(where, recharger)
+        return ret_sol
 
     def choose_best_insert(solution: Solution, node: Node, route_indexes: list) -> tuple:
         min_increase_dis_to_route = float('inf')

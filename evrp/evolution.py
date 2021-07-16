@@ -7,7 +7,7 @@ from .util import *
 from .operation import *
 
 
-class VNS_TS_Evolution:
+class VNS_TS:
     # 构造属性
     model = None
 
@@ -35,6 +35,40 @@ class VNS_TS_Evolution:
         for key, value in param.items():
             assert hasattr(self, key)
             setattr(self, key, value)
+
+    @staticmethod
+    def penalty_capacity(route: Route, vehicle: Vehicle) -> float:
+        if route.arrive_load_weight is None:
+            route.cal_load_weight(vehicle)
+        penalty = max(route.arrive_load_weight[0]-vehicle.capacity, 0)
+        neg_demand_cus = []
+        for i, cus in enumerate(route.visit):
+            if cus.demand < 0:
+                neg_demand_cus.append(i)
+        for i in neg_demand_cus:
+            penalty += max(route.arrive_load_weight[i]-vehicle.capacity, 0)
+        return penalty
+
+    @staticmethod
+    def penalty_time(route: Route, vehicle: Vehicle) -> float:
+        if route.arrive_time is None:
+            route.cal_arrive_time(vehicle)
+        late_time = route.arrive_time-np.array([cus.over_time for cus in route.visit])
+        if_late = np.where(late_time > 0)[0]
+        if len(if_late) > 0:
+            return late_time[if_late[0]]
+        else:
+            return 0.0
+
+    @staticmethod
+    def penalty_battery(route: Route, vehicle: Vehicle) -> float:
+        if route.arrive_remain_battery is None:
+            route.cal_remain_battery(vehicle)
+        return np.abs(np.sum(route.arrive_remain_battery, where=route.arrive_remain_battery < 0))
+
+    @staticmethod
+    def get_objective_route(route: Route, vehicle: Vehicle, penalty: tuple) -> float:
+        return route.sum_distance()+penalty[0]*VNS_TS.penalty_capacity(route, vehicle)+penalty[1]*VNS_TS.penalty_time(route, vehicle)+penalty[2]*VNS_TS.penalty_battery(route, vehicle)
 
     def random_create(self) -> Solution:
         x = random.uniform(self.model.get_map_bound()[0], self.model.get_map_bound()[1])
@@ -109,7 +143,7 @@ class VNS_TS_Evolution:
         while feasibilityPhase or i < self.eta_dist:
             S1 = Operation.cyclic_exchange(S, *self.vns_neighbour[k])
             S2 = self.tabu_search(S1, self.eta_tabu)
-            if random.random() < acceptSA.probability(S2.get_objective(self.model, self.penalty_0), S.get_objective(self.model, self.penalty_0), i):
+            if random.random() < acceptSA.probability(DEMA.get_objective(S2, self.model, self.penalty_0), DEMA.get_objective(S, self.model, self.penalty_0), i):
                 S = S2
                 print(i, S)
                 print(S.feasible(self.model), S.sum_distance())
@@ -128,7 +162,7 @@ class VNS_TS_Evolution:
         return S
 
 
-class DEMA_Evolution:
+class DEMA:
     # 构造属性
     model = None
     penalty = (15, 5, 10)
@@ -138,7 +172,7 @@ class DEMA_Evolution:
     sigma = (1, 5, 10)
     theta = 0.7
     maxiter_tabu_mul = 4
-    max_neighbour_mul = 3
+    max_neighbour_mul = 5
     tabu_len = 4
     local_search_step = 10
     charge_modify_step = 14
@@ -153,6 +187,21 @@ class DEMA_Evolution:
         for key, value in param.items():
             assert hasattr(self, key)
             setattr(self, key, value)
+
+    @staticmethod
+    def get_objective_route(route: Route, vehicle: Vehicle, penalty: tuple) -> float:
+        return route.sum_distance()+penalty[0]*VNS_TS.penalty_capacity(route, vehicle)+penalty[1]*VNS_TS.penalty_time(route, vehicle)+penalty[2]*VNS_TS.penalty_battery(route, vehicle)
+
+    @staticmethod
+    def get_objective(solution: Solution, model: Model, penalty: tuple) -> float:
+        if solution.objective == 0:
+            ret = 0
+            for route in solution.routes:
+                ret += DEMA.get_objective_route(route, model.vehicle, penalty)
+            solution.objective = ret
+            return ret
+        else:
+            return solution.objective
 
     def random_create(self) -> Solution:
         x = random.uniform(self.model.get_map_bound()[0], self.model.get_map_bound()[1])
@@ -253,12 +302,12 @@ class DEMA_Evolution:
                 fes_P.append(sol)
             else:
                 infes_P.append(sol)
-        fes_P.sort(key=lambda sol: sol.get_objective(self.model, self.penalty))
+        fes_P.sort(key=lambda sol: DEMA.get_objective(sol, self.model, self.penalty))
 
         obj_value = []
         for sol in infes_P:
             overlapping_degree = Operation.overlapping_degree_population(sol, P)
-            objective = sol.get_objective(self.model, self.penalty)
+            objective = DEMA.get_objective(sol, self.model, self.penalty)
             obj_value.append([objective, overlapping_degree])
         infes_P = Util.pareto_sort(infes_P, obj_value)
 
@@ -268,7 +317,7 @@ class DEMA_Evolution:
         for i in choose:
             P_parent.append(P[i])
         P_child = []
-        all_cost = [sol.get_objective(self.model, self.penalty) for sol in P]
+        all_cost = [DEMA.get_objective(sol, self.model, self.penalty) for sol in P]
         while len(P_child) < self.size:
             if len(P_child) == int((1-self.infeasible_proportion)*self.size):
                 penalty_save = self.penalty
@@ -290,10 +339,10 @@ class DEMA_Evolution:
                 S = Operation.ACO_GM_cross2(S_parent, S2)
 
             cross_call_times[sel] += 1
-            cost = S.get_objective(self.model, self.penalty)
+            cost = DEMA.get_objective(S, self.model, self.penalty)
             if cost < all(all_cost):
                 cross_score[sel] += self.sigma[0]
-            elif cost < S_parent.get_objective(self.model, self.penalty):
+            elif cost < DEMA.get_objective(S_parent, self.model, self.penalty):
                 cross_score[sel] += self.sigma[1]
             else:
                 cross_score[sel] += self.sigma[2]
@@ -311,11 +360,11 @@ class DEMA_Evolution:
                 SP1.append(sol)
             else:
                 SP2.append(sol)
-        SP1.sort(key=lambda sol: sol.get_objective(self.model, self.penalty))
+        SP1.sort(key=lambda sol: DEMA.get_objective(sol, self.model, self.penalty))
         obj_value = []
         for sol in SP2:
             overlapping_degree = Operation.overlapping_degree_population(sol, P)
-            objective = sol.get_objective(self.model, self.penalty)
+            objective = DEMA.get_objective(sol, self.model, self.penalty)
             obj_value.append([objective, overlapping_degree])
         SP2 = Util.pareto_sort(SP2, obj_value)
         sp1up = int((iter/self.maxiter_evo)*self.size)
@@ -338,14 +387,14 @@ class DEMA_Evolution:
 
     def tabu_search(self, solution: Solution) -> Solution:
         best_sol = solution
-        best_val = solution.get_objective(self.model, self.penalty)
+        best_val = DEMA.get_objective(solution, self.model, self.penalty)
         tabu_list = {}
         #delta = collections.deque([float('inf')]*10, maxlen=10)
         for iter in range(int(self.maxiter_tabu_mul*len(self.model.customers))):
             print('tabu {} {}'.format(iter, best_val))
             actions = []
             while len(actions) < int(self.max_neighbour_mul*len(self.model.customers)):
-                act = random.choice(['exchange', 'relocate', 'two-opt'])
+                act = random.choice(['exchange', 'relocate', 'two-opt', 'stationInRe'])
                 if act == 'exchange':
                     target = Operation.exchange_choose(solution)
                     if ('exchange', *target) not in actions:
@@ -358,8 +407,12 @@ class DEMA_Evolution:
                     target = Operation.two_opt_choose(solution)
                     if ('two-opt', *target) not in actions:
                         actions.append(('two-opt', *target))
+                elif act == 'stationInRe':
+                    target = Operation.stationInRe_choose(solution, self.model)
+                    if ('stationInRe', *target) not in actions:
+                        actions.append(('stationInRe', *target))
             local_best_sol = solution
-            local_best_val = solution.get_objective(self.model, self.penalty)
+            local_best_val = DEMA.get_objective(solution, self.model, self.penalty)
             local_best_action = (None,)
             for action in actions:
                 tabu_status = tabu_list.get(action, 0)
@@ -370,7 +423,9 @@ class DEMA_Evolution:
                         try_sol = Operation.relocate_action(solution, *action[1:])
                     elif action[0] == 'two-opt':
                         try_sol = Operation.two_opt_action(solution, *action[1:])
-                    try_val = try_sol.get_objective(self.model, self.penalty)
+                    elif action[0] == 'stationInRe':
+                        try_sol = Operation.stationInRe_action(solution, *action[1:])
+                    try_val = DEMA.get_objective(try_sol, self.model, self.penalty)
                     if try_val < local_best_val:
                         local_best_sol = try_sol
                         local_best_val = try_val
@@ -392,7 +447,7 @@ class DEMA_Evolution:
 
             solution = local_best_sol
 
-            #delta.append(solution.get_objective(self.model, self.penalty)-local_best_val)
+            #delta.append(DEMA.get_objective(solution, self.model, self.penalty)-local_best_val)
             #should_break = True
             # for i in delta:
             #    if i > 0.00001:
@@ -425,7 +480,7 @@ class DEMA_Evolution:
     def update_S(self, P: list) -> tuple:
         for S in P:
             if S.feasible(self.model):
-                cost = S.get_objective(self.model, self.penalty)
+                cost = DEMA.get_objective(S, self.model, self.penalty)
                 num = len(S.routes)
                 #cost = S.sum_distance()
                 if self.S_best is None:

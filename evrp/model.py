@@ -259,37 +259,7 @@ class Route:
                 at_time += (vehicle.max_battery-remain_battery)/vehicle.charge_speed  # 充电时间
                 remain_battery = vehicle.max_battery
         return True, (loaded_weight, remain_battery, at_time)
-
-    def penalty_capacity(self, vehicle: Vehicle) -> float:
-        if self.arrive_load_weight is None:
-            self.cal_load_weight(vehicle)
-        penalty = max(self.arrive_load_weight[0]-vehicle.capacity, 0)
-        neg_demand_cus = []
-        for i, cus in enumerate(self.visit):
-            if cus.demand < 0:
-                neg_demand_cus.append(i)
-        for i in neg_demand_cus:
-            penalty += max(self.arrive_load_weight[i]-vehicle.capacity, 0)
-        return penalty
-
-    def penalty_time(self, vehicle: Vehicle) -> float:
-        if self.arrive_time is None:
-            self.cal_arrive_time(vehicle)
-        late_time = self.arrive_time-np.array([cus.over_time for cus in self.visit])
-        if_late = np.where(late_time > 0)[0]
-        if len(if_late) > 0:
-            return late_time[if_late[0]]
-        else:
-            return 0.0
-
-    def penalty_battery(self, vehicle: Vehicle) -> float:
-        if self.arrive_remain_battery is None:
-            self.cal_remain_battery(vehicle)
-        return np.abs(np.sum(self.arrive_remain_battery, where=self.arrive_remain_battery < 0))
-
-    def get_objective(self, vehicle: Vehicle, penalty: tuple) -> float:
-        return self.sum_distance()+penalty[0]*self.penalty_capacity(vehicle)+penalty[1]*self.penalty_time(vehicle)+penalty[2]*self.penalty_battery(vehicle)
-
+    
     def clear_status(self) -> None:
         self.arrive_load_weight = None
         self.arrive_remain_battery = None
@@ -480,16 +450,6 @@ class Solution:
             if result[0] == False:
                 ret_dict[i] = result
         return ret_dict
-
-    def get_objective(self, model: Model, penalty: tuple) -> float:
-        if self.objective == 0:
-            ret = 0
-            for route in self.routes:
-                ret += route.get_objective(model.vehicle, penalty)
-            self.objective = ret
-            return ret
-        else:
-            return self.objective
 
     def clear_status(self) -> None:
         self.objective = 0
