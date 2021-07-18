@@ -1,4 +1,6 @@
 import enum
+
+from numpy.lib.utils import source
 from .model import *
 from .util import *
 
@@ -168,6 +170,7 @@ class Operation:
             ret_sol.routes[which].visit.insert(where, recharger)
         return ret_sol
 
+    @staticmethod
     def choose_best_insert(solution: Solution, node: Node, route_indexes: list) -> tuple:
         min_increase_dis_to_route = float('inf')
         to_route = None
@@ -232,61 +235,6 @@ class Operation:
         return solution1
 
     @staticmethod
-    def overlapping_degree(solution1: Solution, solution2: Solution) -> float:
-        sol1arcs = []
-        sol2arcs = []
-        for route in solution1.routes:
-            for i in range(len(route.visit)-1):
-                sol1arcs.append((route.visit[i], route.visit[i+1]))
-        for route in solution2.routes:
-            for i in range(len(route.visit)-1):
-                sol2arcs.append((route.visit[i], route.visit[i+1]))
-        num = 0
-        for arc in sol1arcs:
-            if arc in sol2arcs:
-                num += 2
-        return num/(len(sol1arcs)+len(sol2arcs))
-
-    @staticmethod
-    def overlapping_degree_population(solution: Solution, population: list) -> float:
-        sum = 0
-        for p in population:
-            sum += Operation.overlapping_degree(solution, p)
-        return sum/len(population)
-
-    # @staticmethod
-    # def similarity_degree(solution: Solution, population: list) -> float:
-    #    solarcs = []
-    #    for route in solution.routes:
-    #        for i in range(len(route.visit)-1):
-    #            solarcs.append((route.visit[i], route.visit[i+1]))
-    #    poparcs = []
-    #    for popsol in population:
-    #        for route in popsol.routes:
-    #            for i in range(len(route.visit)-1):
-    #                poparcs.append((route.visit[i], route.visit[i+1]))
-    #    up = 0
-    #    down = 0
-    #    for arc in solarcs:
-    #        if arc in poparcs:
-    #            down += 1
-    #            up += poparcs.count(arc)
-    #    return up/down
-
-    @staticmethod
-    def find_near_station_between(node1: Node, node2: Node, model: Model) -> Recharger:
-        min_dis = float('inf')
-        min_station = None
-        for station in model.rechargers:
-            if station == node1 or station == node2 or (isinstance(node1, Depot) and station.x == node1.x and station.y == node1.y) or (isinstance(node2, Depot) and station.x == node2.x and station.y == node2.y):
-                continue
-            dis = node1.distance_to(station)+node2.distance_to(station)
-            if dis < min_dis:
-                min_dis = dis
-                min_station = station
-        return min_station
-
-    @staticmethod
     def charging_modification(solution: Solution, model: Model) -> Solution:
         solution = solution.copy()
         ready_to_remove = []
@@ -313,9 +261,9 @@ class Operation:
                     left_choose = []
                     right_choose = []
                     for node_i in left_insert:
-                        left_choose.append((node_i, Operation.find_near_station_between(route.visit[node_i], route.visit[node_i-1], model)))
+                        left_choose.append((node_i, model.find_near_station_between(route.visit[node_i], route.visit[node_i-1])))
                     for node_i in right_insert:
-                        right_choose.append((node_i, Operation.find_near_station_between(route.visit[node_i], route.visit[node_i-1], model)))
+                        right_choose.append((node_i, model.find_near_station_between(route.visit[node_i], route.visit[node_i-1])))
                     for left in left_choose:
                         for right in right_choose:
                             route.visit.insert(left[0], left[1])
@@ -342,7 +290,7 @@ class Operation:
                 elif len(common_insert) == 0 and len(right_insert) == 0:
                     choose = []
                     for node_i in left_insert:
-                        choose.append((node_i, Operation.find_near_station_between(route.visit[node_i], route.visit[node_i-1], model)))
+                        choose.append((node_i, model.find_near_station_between(route.visit[node_i], route.visit[node_i-1])))
                     for pair in choose:
                         route.visit.insert(pair[0], pair[1])
                         route.clear_status()
@@ -364,7 +312,7 @@ class Operation:
                     common_insert.sort()
                     choose = []
                     for node_i in common_insert:
-                        choose.append((node_i, Operation.find_near_station_between(route.visit[node_i], route.visit[node_i-1], model)))
+                        choose.append((node_i, model.find_near_station_between(route.visit[node_i], route.visit[node_i-1])))
                     for pair in choose:
                         route.visit.insert(pair[0], pair[1])
                         route.clear_status()
@@ -391,12 +339,14 @@ class Operation:
 
         return solution
 
+    @staticmethod
     def create_test_solution(model: Model) -> Solution:
         routes = []
         for cus in model.customers:
             routes.append(Route([model.depot, cus, model.depot]))
         return Solution(routes)
 
+    @staticmethod
     def test_model(model: Model) -> bool:
         S = Operation.create_test_solution(model)
         result = S.feasible_detail(model)
@@ -409,6 +359,7 @@ class Operation:
             return False
         return True
 
+    @staticmethod
     def fix_time(solution: Solution, model: Model) -> Solution:
         solution = solution.copy()
 
@@ -423,3 +374,15 @@ class Operation:
         solution.remove_empty_route()
 
         return solution
+
+    @staticmethod
+    def find_left_right_station(route: Route, where: int) -> tuple:
+        left_where = where-1
+        while not(isinstance(route.visit[left_where], Recharger)) and not(isinstance(route.visit[left_where], Depot)):
+            left_where -= 1
+        left = route.visit[left_where]
+        right_where = where+1
+        while not(isinstance(route.visit[right_where], Recharger)) and not(isinstance(route.visit[right_where], Depot)):
+            right_where += 1
+        right = route.visit[right_where]
+        return (left, right)

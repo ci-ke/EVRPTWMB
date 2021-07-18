@@ -259,7 +259,7 @@ class Route:
                 at_time += (vehicle.max_battery-remain_battery)/vehicle.charge_speed  # 充电时间
                 remain_battery = vehicle.max_battery
         return True, (loaded_weight, remain_battery, at_time)
-    
+
     def clear_status(self) -> None:
         self.arrive_load_weight = None
         self.arrive_remain_battery = None
@@ -387,6 +387,18 @@ class Model:
             other_staion.sort(key=lambda rec: station.distance_to(rec))
             self.nearest_station[station] = other_staion
 
+    def find_near_station_between(self, node1: Node, node2: Node) -> Recharger:
+        min_dis = float('inf')
+        min_station = None
+        for station in self.rechargers:
+            if station == node1 or station == node2 or (isinstance(node1, Depot) and station.x == node1.x and station.y == node1.y) or (isinstance(node2, Depot) and station.x == node2.x and station.y == node2.y):
+                continue
+            dis = node1.distance_to(station)+node2.distance_to(station)
+            if dis < min_dis:
+                min_dis = dis
+                min_station = station
+        return min_station
+
     def set_negative_demand(self, every: int) -> None:
         for i, cus in enumerate(self.customers):
             if i % every == every-1:
@@ -397,7 +409,7 @@ class Solution:
     # 构造属性
     routes = []
     # 状态属性
-    objective = 0.0
+    objective = None
 
     def __init__(self, routes: list) -> None:
         assert isinstance(routes[0], Route)
