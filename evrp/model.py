@@ -2,6 +2,8 @@ import random
 import numpy as np
 from abc import ABCMeta
 
+from numpy.lib import index_tricks
+
 
 class Node(metaclass=ABCMeta):
     # 构造属性
@@ -297,6 +299,12 @@ class Route:
                 del self.visit[i]
             i += 1
 
+    def remove_depot_to_recharger0(self) -> None:
+        while isinstance(self.visit[1], Recharger) and self.visit[1].x == self.visit[0].x and self.visit[1].y == self.visit[0].y:
+            del self.visit[1]
+        while isinstance(self.visit[-2], Recharger) and self.visit[-2].x == self.visit[0].x and self.visit[-2].y == self.visit[0].y:
+            del self.visit[-2]
+
 
 class Model:
     # 构造属性
@@ -409,15 +417,19 @@ class Solution:
     # 构造属性
     routes = []
     # 状态属性
+    id = []
+    next_id = 0
     objective = None
 
     def __init__(self, routes: list) -> None:
         assert isinstance(routes[0], Route)
         self.routes = routes
+        self.id = list(range(len(routes)))
+        self.next_id = len(routes)
 
     def __str__(self) -> str:
         retstr = 'Solution: {} route{}'.format(len(self.routes), 's' if len(self.routes) != 1 else '')
-        for i, route in enumerate(self.routes):
+        for i, route in zip(self.id, self.routes):
             #retstr += '\n'+' '*4+str(route)[:5]+'_'+str(i)+str(route)[5:]
             retstr += '\n    {}_{}{}'.format(str(route)[:5], i, str(route)[5:])
         return retstr
@@ -438,7 +450,10 @@ class Solution:
         return True
 
     def copy(self) -> object:
-        return Solution([route.copy() for route in self.routes])
+        ret = Solution([route.copy() for route in self.routes])
+        ret.id = self.id[:]
+        ret.next_id = self.next_id
+        return ret
 
     def arrange(self) -> None:
         self.routes.sort(key=lambda route: (route.visit[1].id, route.visit[1].x, route.visit[1].y))
@@ -464,18 +479,47 @@ class Solution:
         return ret_dict
 
     def clear_status(self) -> None:
-        self.objective = 0
+        self.objective = None
         for route in self.routes:
             route.clear_status()
 
     def addVehicle(self, model: Model) -> None:
         if len(self.routes) < model.max_vehicle:
             self.routes.append(Route([self.routes[0].visit[0], self.routes[0].visit[0]]))
+            self.id.append(self.next_id)
+            self.next_id += 1
 
     def remove_empty_route(self) -> None:
         i = 0
         while i < len(self.routes):
             if self.routes[i].no_customer():
                 del self.routes[i]
+                del self.id[i]
                 continue
             i += 1
+
+    def remove_route_index(self, index: int) -> None:
+        del self.routes[index]
+        del self.id[index]
+
+    def remove_route_object(self, route: Route) -> None:
+        index = self.routes.index(route)
+        del self.routes[index]
+        del self.id[index]
+
+    def add_route(self, route: Route) -> None:
+        self.routes.append(route)
+        self.id.append(self.next_id)
+        self.next_id += 1
+
+    def renumber_id(self) -> None:
+        self.id = list(range(len(self.routes)))
+        self.next_id = len(self.routes)
+
+    def get_id_from_route(self, route: Route) -> int:
+        index = self.routes.index(route)
+        return self.id[index]
+
+    def get_route_from_id(self, id: int) -> Route:
+        index = self.id.index(id)
+        return self.routes[index]

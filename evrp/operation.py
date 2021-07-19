@@ -21,6 +21,11 @@ class Operation:
 
         ret_sol.remove_empty_route()
 
+        for route in ret_sol.routes:
+            route.remove_depot_to_recharger0()
+        for route in ret_sol.routes:
+            route.remove_successive_recharger()
+
         return ret_sol
 
     @staticmethod
@@ -32,9 +37,9 @@ class Operation:
         ret_sol.routes[second_which].visit[second_where+1:] = solution.routes[first_which].visit[first_where+1:]
 
         if ret_sol.routes[first_which].no_customer():
-            del ret_sol.routes[first_which]
+            ret_sol.remove_route_index(first_which)
         elif ret_sol.routes[second_which].no_customer():
-            del ret_sol.routes[second_which]
+            ret_sol.remove_route_index(second_which)
 
         return ret_sol
 
@@ -66,7 +71,7 @@ class Operation:
             ret_sol[new_which].visit.insert(new_where, solution.routes[which].visit[where])
             del ret_sol.routes[which].visit[where]
             if ret_sol.routes[which].no_customer():
-                del ret_sol.routes[which]
+                ret_sol.remove_route_index(which)
         else:
             ret_sol[which].visit.insert(new_where, solution.routes[which].visit[where])
             if new_where > where:
@@ -75,15 +80,134 @@ class Operation:
                 del ret_sol.routes[which].visit[where+1]
 
         for route in ret_sol.routes:
-            if isinstance(route.visit[1], Recharger) and route.visit[1].x == route.visit[0].x and route.visit[1].y == route.visit[0].y:
-                del route.visit[1]
-            if isinstance(route.visit[-2], Recharger) and route.visit[-2].x == route.visit[0].x and route.visit[-2].y == route.visit[0].y:
-                del route.visit[-2]
-
-        for route in ret_sol:
+            route.remove_depot_to_recharger0()
+        for route in ret_sol.routes:
             route.remove_successive_recharger()
 
         return ret_sol
+
+    @staticmethod
+    def relocate_arc(solution: Solution, node1: Node, node2: Node) -> list:
+        if isinstance(node1, Depot):
+            return []
+        elif isinstance(node1, Customer) and isinstance(node2, Customer):
+            flag = 0
+            which = 0
+            while which < len(solution.routes) and flag != 2:
+                where = 1
+                while where < len(solution.routes[which].visit)-1 and flag != 2:
+                    node = solution.routes[which].visit[where]
+                    if node is node1:
+                        which1 = which
+                        where1 = where
+                        flag += 1
+                    elif node is node2:
+                        which2 = which
+                        where2 = where
+                        flag += 1
+                    where += 1
+                which += 1
+            if which1 == which2 and where2 == where1+1:
+                return []
+            sol = Operation.relocate_action(solution, which1, where1, which2, where2)
+            return [sol]
+        elif isinstance(node1, Customer) and isinstance(node2, Depot):
+            flag = True
+            which = 0
+            while which < len(solution.routes) and flag:
+                where = 1
+                while where < len(solution.routes[which].visit)-1 and flag:
+                    node = solution.routes[which].visit[where]
+                    if node is node1:
+                        which1 = which
+                        where1 = where
+                        flag = False
+                    where += 1
+                which += 1
+            ret_sol = []
+            which = 0
+            while which < len(solution.routes):
+                if which == which1 and where1 == len(solution.routes[which].visit)-2:
+                    pass
+                else:
+                    which2 = which
+                    where2 = len(solution.routes[which].visit)-1
+                    sol = Operation.relocate_action(solution, which1, where1, which2, where2)
+                    ret_sol.append(sol)
+                which += 1
+            return ret_sol
+        elif isinstance(node1, Customer) and isinstance(node2, Recharger):
+            recharger_which_where = []
+            which = 0
+            while which < len(solution.routes):
+                where = 1
+                while where < len(solution.routes[which].visit)-1:
+                    node = solution.routes[which].visit[where]
+                    if node is node1:
+                        which1 = which
+                        where1 = where
+                    elif node is node2:
+                        recharger_which_where.append((which, where))
+                    where += 1
+                which += 1
+            ret_sol = []
+            for rec in recharger_which_where:
+                sol = Operation.relocate_action(solution, which1, where1, rec[0], rec[1])
+                ret_sol.append(sol)
+            return ret_sol
+        elif isinstance(node1, Recharger) and isinstance(node2, Customer):
+            recharger_which_where = []
+            which = 0
+            while which < len(solution.routes):
+                where = 1
+                while where < len(solution.routes[which].visit)-1:
+                    node = solution.routes[which].visit[where]
+                    if node is node2:
+                        which2 = which
+                        where2 = where
+                    elif node is node1:
+                        recharger_which_where.append((which, where))
+                    where += 1
+                which += 1
+            ret_sol = []
+            for rec in recharger_which_where:
+                sol = Operation.relocate_action(solution, rec[0], rec[1], which2, where2)
+                ret_sol.append(sol)
+            return ret_sol
+        elif isinstance(node1, Recharger) and isinstance(node2, Depot):
+            recharger_which_where = []
+            which = 0
+            while which < len(solution.routes):
+                where = 1
+                while where < len(solution.routes[which].visit)-1:
+                    node = solution.routes[which].visit[where]
+                    if node is node1:
+                        recharger_which_where.append((which, where))
+                    where += 1
+                which += 1
+            ret_sol = []
+            if node1.x == node2.x and node1.y == node2.y:
+                for rec in recharger_which_where:
+                    sol = solution.copy()
+                    del sol.routes[rec[0]].visit[rec[1]]
+                    sol.routes[rec[0]].remove_successive_recharger()
+                    ret_sol.append(sol)
+                return ret_sol
+            else:
+                for rec in recharger_which_where:
+                    which = 0
+                    while which < len(solution.routes):
+                        if which == rec[0] and rec[1] == len(solution.routes[which].visit)-2:
+                            pass
+                        else:
+                            which2 = which
+                            where2 = len(solution.routes[which].visit)-1
+                            sol = Operation.relocate_action(solution, rec[0], rec[1], which2, where2)
+                            ret_sol.append(sol)
+                        which += 1
+                return ret_sol
+        elif isinstance(node1, Recharger) and isinstance(node2, Recharger):
+            return []
 
     @staticmethod
     def exchange_choose(solution: Solution) -> tuple:
@@ -206,7 +330,7 @@ class Operation:
                 if isinstance(node, Customer):
                     to_route, insert_place_to_route = Operation.choose_best_insert(solution, node, rest_routes_index)
                     solution.routes[to_route].visit.insert(insert_place_to_route, node)
-            del solution.routes[select]
+            solution.remove_route_index(select)
         solution.clear_status()
         return solution
 
@@ -282,9 +406,9 @@ class Operation:
                         cut_point = left_insert[-1]
                         if cut_point == len(route.visit)-1:
                             cut_point -= 1
-                        solution.routes.append(Route(route.visit[0:cut_point]+[model.depot]))
+                        solution.add_route(Route(route.visit[0:cut_point]+[model.depot]))
                         assert len(solution[-1].visit) != 2
-                        solution.routes.append(Route([model.depot]+route.visit[cut_point:]))
+                        solution.add_route(Route([model.depot]+route.visit[cut_point:]))
                         assert len(solution[-1].visit) != 2
                         ready_to_remove.append(route)
                 elif len(common_insert) == 0 and len(right_insert) == 0:
@@ -303,9 +427,9 @@ class Operation:
                         cut_point = left_insert[-1]
                         if cut_point == len(route.visit)-1:
                             cut_point -= 1
-                        solution.routes.append(Route(route.visit[0:cut_point]+[model.depot]))
+                        solution.add_route(Route(route.visit[0:cut_point]+[model.depot]))
                         assert len(solution[-1].visit) != 2
-                        solution.routes.append(Route([model.depot]+route.visit[cut_point:]))
+                        solution.add_route(Route([model.depot]+route.visit[cut_point:]))
                         assert len(solution[-1].visit) != 2
                         ready_to_remove.append(route)
                 elif len(common_insert) != 0:
@@ -325,15 +449,15 @@ class Operation:
                         cut_point = common_insert[-1]
                         if cut_point == len(route.visit)-1:
                             cut_point -= 1
-                        solution.routes.append(Route(route.visit[0:cut_point]+[model.depot]))
+                        solution.add_route(Route(route.visit[0:cut_point]+[model.depot]))
                         assert len(solution[-1].visit) != 2
-                        solution.routes.append(Route([model.depot]+route.visit[cut_point:]))
+                        solution.add_route(Route([model.depot]+route.visit[cut_point:]))
                         assert len(solution[-1].visit) != 2
                         ready_to_remove.append(route)
                 else:
                     raise Exception('impossible')
         for route in ready_to_remove:
-            solution.routes.remove(route)
+            solution.remove_route_object(route)
 
         solution.remove_empty_route()
 
@@ -369,7 +493,7 @@ class Operation:
                 new_route = [model.depot]+route.visit[cut:]
                 route.visit[cut-1:] = [model.depot]
                 route.clear_status()
-                solution.routes.append(Route(new_route))
+                solution.add_route(Route(new_route))
 
         solution.remove_empty_route()
 

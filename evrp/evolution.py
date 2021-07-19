@@ -199,11 +199,11 @@ class DEMA:
             assert hasattr(self, key)
             setattr(self, key, value)
 
-    @ staticmethod
+    @staticmethod
     def get_objective_route(route: Route, vehicle: Vehicle, penalty: tuple) -> float:
         return route.sum_distance()+penalty[0]*VNS_TS.penalty_capacity(route, vehicle)+penalty[1]*VNS_TS.penalty_time(route, vehicle)+penalty[2]*VNS_TS.penalty_battery(route, vehicle)
 
-    @ staticmethod
+    @staticmethod
     def get_objective(solution: Solution, model: Model, penalty: tuple) -> float:
         if solution.objective is None:
             ret = 0
@@ -214,7 +214,7 @@ class DEMA:
         else:
             return solution.objective
 
-    @ staticmethod
+    @staticmethod
     def overlapping_degree(solution1: Solution, solution2: Solution) -> float:
         sol1arcs = []
         sol2arcs = []
@@ -230,7 +230,7 @@ class DEMA:
                 num += 2
         return num/(len(sol1arcs)+len(sol2arcs))
 
-    @ staticmethod
+    @staticmethod
     def overlapping_degree_population(solution: Solution, population: list) -> float:
         sum = 0
         for p in population:
@@ -286,26 +286,6 @@ class DEMA:
 
         return Solution(routes)
 
-    def abondon_random_create(self) -> Solution:
-        choose = self.model.customers[:]
-        random.shuffle(choose)
-        routes = []
-        building_route_visit = [self.model.depot]
-        i = 0
-        while i < len(choose):
-            try_route = Route(building_route_visit+[choose[i], self.model.depot])
-            if try_route.feasible_weight(self.model.vehicle) and try_route.feasible_time(self.model.vehicle):
-                if i == len(choose)-1:
-                    routes.append(try_route)
-                    break
-                building_route_visit.append(choose[i])
-                i += 1
-            else:
-                building_route_visit.append(self.model.depot)
-                routes.append(Route(building_route_visit))
-                building_route_visit = [self.model.depot]
-        return Solution(routes)
-
     def initialization(self) -> list:
         population = []
         for _ in range(self.size):
@@ -320,6 +300,7 @@ class DEMA:
                         sol = Operation.fix_time(sol, self.model)
                         break
                 else:
+                    sol.renumber_id()
                     break
             population.append(sol)
         return population
@@ -353,9 +334,9 @@ class DEMA:
         P_child = []
         all_cost = [DEMA.get_objective(sol, self.model, self.penalty) for sol in P]
         while len(P_child) < self.size:
-            if len(P_child) == int((1-self.infeasible_proportion)*self.size):
-                penalty_save = self.penalty
-                self.penalty = (0, 0, 0)
+            #if len(P_child) == int((1-self.infeasible_proportion)*self.size):
+            #    penalty_save = self.penalty
+            #    self.penalty = (0, 0, 0)
             for i in range(2):
                 if cross_call_times[i] != 0:
                     cross_weigh[i] = self.theta*np.pi/cross_call_times[i]+(1-self.theta)*cross_weigh[i]
@@ -383,7 +364,7 @@ class DEMA:
 
             P_child.append(S)
 
-        self.penalty = penalty_save
+        #self.penalty = penalty_save
         return P_child
 
     def ISSD(self, P: list, iter: int) -> list:
