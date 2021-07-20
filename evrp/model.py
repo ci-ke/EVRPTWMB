@@ -412,6 +412,16 @@ class Model:
             if i % every == every-1:
                 cus.demand = -cus.demand
 
+    def get_customer(self, id: int) -> Customer:
+        for customer in self.customers:
+            if customer.id == id:
+                return customer
+
+    def get_recharger(self, id: int) -> Recharger:
+        for recharger in self.rechargers:
+            if recharger.id == id:
+                return recharger
+
 
 class Solution:
     # 构造属性
