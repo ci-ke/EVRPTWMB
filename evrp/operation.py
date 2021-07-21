@@ -27,8 +27,6 @@ class Operation:
     @staticmethod
     def two_opt_star_action(solution: Solution, first_which: int, first_where: int, second_which: int, second_where: int) -> Solution:
         assert first_which != second_which
-        assert first_where >= 0 and first_where <= len(solution.routes[first_which].visit)-2
-        assert second_where >= 0 and second_where <= len(solution.routes[second_which].visit)-2
         ret_sol = solution.copy()
         ret_sol.routes[first_which].visit[first_where+1:] = solution.routes[second_which].visit[second_where+1:]
         ret_sol.routes[second_which].visit[second_where+1:] = solution.routes[first_which].visit[first_where+1:]
@@ -342,6 +340,9 @@ class Operation:
             which = random.randint(0, len(solution.routes)-1)
             where = random.randint(1, len(solution.routes[which].visit)-2)
         recharger = random.choice(model.rechargers)
+        depot = solution.routes[0].visit[0]
+        while recharger.x == depot.x and recharger.y == depot.y and (where == 1 or where == len(solution.routes[which].visit)-2):
+            recharger = random.choice(model.rechargers)
         return recharger, which, where
 
     @staticmethod
@@ -351,7 +352,44 @@ class Operation:
             del ret_sol.routes[which].visit[where-1]
         else:
             ret_sol.routes[which].visit.insert(where, recharger)
+        # ret_sol.routes[which].remove_depot_to_recharger0()
         return ret_sol
+
+    @staticmethod
+    def stationInRe_arc(solution: Solution, node1: Recharger, node2: Node) -> list:
+        assert isinstance(node1, Recharger) and not node1 is node2
+        if isinstance(node2, Customer):
+            which2, where2 = Operation.find_customer(solution, node2)
+            if where2 == 1:
+                depot = solution.routes[0].visit[0]
+                if node1.x == depot.x and node1.y == depot.y:
+                    return []
+            sol = Operation.stationInRe_action(solution, node1, which2, where2)
+            return [sol]
+        elif isinstance(node2, Depot):
+            if node1.x == node2.x and node1.y == node2.y:
+                return []
+            ret_sol = []
+            cur_which = 0
+            while cur_which < len(solution.routes):
+                cur_where = len(solution.routes[cur_which].visit)-1
+                sol = Operation.stationInRe_action(solution, node1, cur_which, cur_where)
+                ret_sol.append(sol)
+                cur_which += 1
+            return ret_sol
+        elif isinstance(node2, Recharger):
+            recharger2_which_where = Operation.find_recharger(solution, node2)
+            ret_sol = []
+            for which2, where2 in recharger2_which_where:
+                if where2 == 1:
+                    depot = solution.routes[0].visit[0]
+                    if node1.x == depot.x and node1.y == depot.y:
+                        continue
+                sol = Operation.stationInRe_action(solution, node1, which2, where2)
+                ret_sol.append(sol)
+            return ret_sol
+        else:
+            raise Exception('impossible')
 
     @staticmethod
     def choose_best_insert(solution: Solution, node: Node, route_indexes: list) -> tuple:

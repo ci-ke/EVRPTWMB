@@ -2,8 +2,6 @@ import random
 import numpy as np
 from abc import ABCMeta
 
-from numpy.lib import index_tricks
-
 
 class Node(metaclass=ABCMeta):
     # 构造属性
@@ -416,11 +414,13 @@ class Model:
         for customer in self.customers:
             if customer.id == id:
                 return customer
+        raise Exception('no this customer')
 
     def get_recharger(self, id: int) -> Recharger:
         for recharger in self.rechargers:
             if recharger.id == id:
                 return recharger
+        raise Exception('no this recharger')
 
 
 class Solution:
