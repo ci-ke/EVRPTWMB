@@ -2,6 +2,8 @@ import os
 import pickle
 import collections
 
+from numpy.lib.function_base import select
+
 from .model import *
 from .util import *
 from .operation import *
@@ -17,25 +19,32 @@ class VNS_TS:
     eta_dist = 20
     Delta_SA = 0.08
 
-    penalty_0 = (10, 10, 10)
-    penalty_min = tuple()
-    penalty_max = tuple()
-    delta = 0.0
-    eta_penalty = 0
+    penalty = [10, 10, 10]
+    penalty_min = (0.5, 0.5, 0.5)
+    penalty_max = (5000, 5000, 5000)
+    delta = 1.2
+    eta_penalty = 2
 
-    nu_min = 0
-    nu_max = 0
-    lambda_div = 0.0
+    nu_min = 15
+    nu_max = 30
+    lambda_div = 1.0
     eta_tabu = 100
-    # 计算属性
+    # 状态属性
     vns_neighbour = []
     frequency = {}
+    possible_arc = {}
+    SA = None
+    penalty_update_flag = []
 
     def __init__(self, model: Model, **param) -> None:
         self.model = model
         for key, value in param.items():
             assert hasattr(self, key)
             setattr(self, key, value)
+
+        self.SA = Util.SA(self.Delta_SA, self.eta_dist)
+        self.penalty_update_flag = [collections.deque(maxlen=self.eta_penalty), collections.deque(maxlen=self.eta_penalty), collections.deque(maxlen=self.eta_penalty)]
+        self.calculate_possible_arc()
 
     @staticmethod
     def penalty_capacity(route: Route, vehicle: Vehicle) -> float:
@@ -71,7 +80,67 @@ class VNS_TS:
     def get_objective_route(route: Route, vehicle: Vehicle, penalty: tuple) -> float:
         return route.sum_distance()+penalty[0]*VNS_TS.penalty_capacity(route, vehicle)+penalty[1]*VNS_TS.penalty_time(route, vehicle)+penalty[2]*VNS_TS.penalty_battery(route, vehicle)
 
-    def update_frequency(self, soloution: Solution):
+    @staticmethod
+    def get_objective(solution: Solution, model: Model, penalty: tuple) -> float:
+        if solution.objective is None:
+            ret = 0
+            for route in solution.routes:
+                ret += VNS_TS.get_objective_route(route, model.vehicle, penalty)
+            solution.objective = ret
+            return solution.objective
+        else:
+            return solution.objective
+
+    def calculate_possible_arc(self) -> None:
+        self.model.find_nearest_station()
+        all_node_list = [self.model.depot]+self.model.rechargers+self.model.customers
+        for node1 in all_node_list:
+            for node2 in all_node_list:
+                if (isinstance(node1, Depot) and isinstance(node2, Recharger) and (node1.x == node2.x and node1.y == node2.y)) or (isinstance(node1, Recharger) and isinstance(node2, Depot) and (node1.x == node2.x and node1.y == node2.y)):
+                    continue
+                if not node1 is node2:
+                    distance = node1.distance_to(node2)
+                    if isinstance(node1, Customer) and isinstance(node2, Customer) and (node1.demand+node2.demand) > self.model.vehicle.capacity:
+                        continue
+                    if node1.ready_time+node1.service_time+distance > node2.over_time:
+                        continue
+                    if node1.ready_time+node1.service_time+distance+node2.service_time+node2.distance_to(self.model.depot) > self.model.depot.over_time:
+                        continue
+                    if isinstance(node1, Customer) and isinstance(node2, Customer):
+                        recharger1 = self.model.nearest_station[node1][0]
+                        recharger2 = self.model.nearest_station[node2][0]
+                        if self.model.vehicle.battery_cost_speed*(node1.distance_to(recharger1)+distance+node2.distance_to(recharger2)) > self.model.vehicle.max_battery:
+                            continue
+                    self.possible_arc[(node1, node2)] = distance
+
+    def select_possible_arc(self, N: int) -> list:
+        selected_arc = []
+        keys = list(self.possible_arc.keys())
+        while len(keys) > 0 and len(selected_arc) < N:
+            values = [self.possible_arc[key] for key in keys]
+            values = np.array(values)
+            values = 1/values
+            values = values/np.sum(values)
+            select = Util.wheel_select(values)
+            selected_arc.append(keys[select])
+            del keys[select]
+        return selected_arc
+
+    def update_penalty(self, S: Solution) -> None:
+        self.penalty_update_flag[0].append(S.feasible_capacity(self.model))
+        self.penalty_update_flag[1].append(S.feasible_time(self.model))
+        self.penalty_update_flag[2].append(S.feasible_battery(self.model))
+        for i in range(len(self.penalty)):
+            if self.penalty_update_flag[i].count(False) == self.eta_penalty:
+                self.penalty[i] += self.delta
+                if self.penalty[i] > self.penalty_max[i]:
+                    self.penalty[i] = self.penalty_max[i]
+            elif self.penalty_update_flag[i].count(True) == self.eta_penalty:
+                self.penalty[i] /= self.delta
+                if self.penalty[i] < self.penalty_min[i]:
+                    self.penalty[i] = self.penalty_min[i]
+
+    def update_frequency(self, soloution: Solution) -> None:
         for which, route in enumerate(soloution.routes):
             for where in range(1, len(route.visit)-1):
                 left, right = Operation.find_left_right_station(route, where)
@@ -116,7 +185,7 @@ class VNS_TS:
             building_route_visit.insert(decide_insert_place, choose[choose_index])
 
             try_route = Route(building_route_visit)
-            if try_route.feasible_weight(self.model.vehicle) and try_route.feasible_battery(self.model.vehicle):
+            if try_route.feasible_capacity(self.model.vehicle) and try_route.feasible_battery(self.model.vehicle):
                 del choose[choose_index]
             else:
                 if len(routes) < self.model.max_vehicle-1:
@@ -140,10 +209,32 @@ class VNS_TS:
             for m in range(1, max+1):
                 self.vns_neighbour.append((R, m))
 
+    @staticmethod
+    def get_tabu_attr(solution: Solution, node1: Node, node2: Node) -> tuple:
+        pass
+
     def tabu_search(self, S: Solution) -> Solution:
-        self.tabu_len = 4
-        self.penalty = self.penalty_0
-        return DEMA.tabu_search(self, S, self.eta_tabu, int(len(self.model.customers)*4))
+        best_S = S
+        best_val = VNS_TS.get_objective(S, self.model, self.penalty)
+        select_arc = self.select_possible_arc(50)
+        for _ in range(self.eta_tabu):
+            local_best_S = None
+            local_best_val = float('inf')
+            neighbor = []
+            for arc in select_arc:
+                neighbor.extend(Operation.two_opt_star_arc(S, *arc))
+                neighbor.extend(Operation.relocate_arc(S, *arc))
+                neighbor.extend(Operation.exchange_arc(S, *arc))
+                neighbor.extend(Operation.stationInRe_arc(S, *arc))
+
+    def acceptSA(self, S2: Solution, S: Solution, i) -> bool:
+        S2_objective = VNS_TS.get_objective(S2, self.model, self.penalty)
+        S_objective = VNS_TS.get_objective(S, self.model, self.penalty)
+        if S2.feasible(self.model) and (len(S2) < len(S) or (len(S2) == len(S) and S2_objective < S_objective)):
+            return True
+        if random.random() < self.SA.probability(S2_objective, S_objective, i):
+            return True
+        return False
 
     def main(self) -> Solution:
         self.create_vns_neighbour(self.vns_neighbour_Rts, self.vns_neighbour_max)
@@ -151,11 +242,11 @@ class VNS_TS:
         k = 0
         i = 0
         feasibilityPhase = True
-        acceptSA = Util.SA(self.Delta_SA, self.eta_dist)
         while feasibilityPhase or i < self.eta_dist:
+            self.update_penalty(S)
             S1 = Operation.cyclic_exchange(S, *self.vns_neighbour[k])
             S2 = self.tabu_search(S1)
-            if random.random() < acceptSA.probability(DEMA.get_objective(S2, self.model, self.penalty_0), DEMA.get_objective(S, self.model, self.penalty_0), i):
+            if self.acceptSA(S2, S, i):
                 S = S2
                 print(i, S.feasible(self.model), S.sum_distance())
                 k = 0
@@ -165,10 +256,10 @@ class VNS_TS:
                 if not S.feasible(self.model):
                     if i == self.eta_feas:
                         S.addVehicle(self.model)
-                        i -= 1
+                        i = -1
                 else:
                     feasibilityPhase = False
-                    i -= 1
+                    i = -1
             i += 1
         return S
 
@@ -273,7 +364,7 @@ class DEMA:
             building_route_visit.insert(decide_insert_place, choose[choose_index])
 
             try_route = Route(building_route_visit)
-            if try_route.feasible_weight(self.model.vehicle)[0] and try_route.feasible_time(self.model.vehicle)[0]:
+            if try_route.feasible_capacity(self.model.vehicle)[0] and try_route.feasible_time(self.model.vehicle)[0]:
                 # del choose[choose_index]
                 choose_index += 1
             else:
@@ -334,7 +425,7 @@ class DEMA:
         P_child = []
         all_cost = [DEMA.get_objective(sol, self.model, self.penalty) for sol in P]
         while len(P_child) < self.size:
-            #if len(P_child) == int((1-self.infeasible_proportion)*self.size):
+            # if len(P_child) == int((1-self.infeasible_proportion)*self.size):
             #    penalty_save = self.penalty
             #    self.penalty = (0, 0, 0)
             for i in range(2):
@@ -492,21 +583,21 @@ class DEMA:
             return retP
         return P
 
-    def update_S(self, P: list) -> tuple:
+    def update_S(self, P: list) -> None:
         for S in P:
             if S.feasible(self.model):
                 cost = DEMA.get_objective(S, self.model, self.penalty)
                 num = len(S.routes)
                 # cost = S.sum_distance()
                 if self.S_best is None:
-                    self.S_best = S
+                    self.S_best = S.copy()
                     self.min_cost = cost
                 elif not self.S_best is None and num < len(self.S_best.routes):
-                    self.S_best = S
+                    self.S_best = S.copy()
                     self.min_cost = cost
                 elif not self.S_best is None and num == len(self.S_best.routes):
                     if cost < self.min_cost:
-                        self.S_best = S
+                        self.S_best = S.copy()
                         self.min_cost = cost
 
     def main(self) -> tuple:

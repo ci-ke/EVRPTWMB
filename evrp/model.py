@@ -191,7 +191,7 @@ class Route:
         #    arrive_time[i:] += ready_time[i]-arrive_time[i]
         self.arrive_time = arrive_time
 
-    def feasible_weight(self, vehicle: Vehicle) -> bool:
+    def feasible_capacity(self, vehicle: Vehicle) -> bool:
         if self.arrive_load_weight is None:
             self.cal_load_weight(vehicle)
         if True in (self.arrive_load_weight > vehicle.capacity):  # 这里不加括号会有错误，in的优先级高
@@ -217,8 +217,8 @@ class Route:
             return True, None
 
     def feasible(self, vehicle: Vehicle) -> tuple:
-        if not self.feasible_weight(vehicle)[0]:
-            return False, 'capacity', self.feasible_weight(vehicle)[1]
+        if not self.feasible_capacity(vehicle)[0]:
+            return False, 'capacity', self.feasible_capacity(vehicle)[1]
         if not self.feasible_time(vehicle)[0]:
             return False, 'time', self.feasible_time(vehicle)[1]
         if not self.feasible_battery(vehicle)[0]:
@@ -474,11 +474,10 @@ class Solution:
     def feasible(self, model: Model) -> bool:
         if len(self.routes) > model.max_vehicle:
             return False
-        route_test_result = map(lambda route: route.feasible(model.vehicle)[0], self.routes)
-        if False in route_test_result:
-            return False
-        else:
-            return True
+        for route in self.routes:
+            if not route.feasible(model.vehicle)[0]:
+                return False
+        return True
 
     def feasible_detail(self, model: Model) -> tuple:
         ret_dict = {}
@@ -487,6 +486,24 @@ class Solution:
             if result[0] == False:
                 ret_dict[i] = result
         return ret_dict
+
+    def feasible_capacity(self, model: Model) -> bool:
+        for route in self.routes:
+            if not route.feasible_capacity(model.vehicle)[0]:
+                return False
+        return True
+
+    def feasible_time(self, model: Model) -> bool:
+        for route in self.routes:
+            if not route.feasible_time(model.vehicle)[0]:
+                return False
+        return True
+
+    def feasible_battery(self, model: Model) -> bool:
+        for route in self.routes:
+            if not route.feasible_battery(model.vehicle)[0]:
+                return False
+        return True
 
     def clear_status(self) -> None:
         self.objective = None

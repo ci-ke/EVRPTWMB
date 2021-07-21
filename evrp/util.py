@@ -22,8 +22,8 @@ class Util:
             self.T0 = Delta_SA/np.log(2)
             self.Delta_T = (self.T0-0.0001)/0.8*max_iter
 
-        def probability(self, S_new: float, S: float, iter: int) -> float:
-            return np.exp(-(S_new-S)/(self.T0-self.delta_T*iter))
+        def probability(self, V_new: float, V: float, iter: int) -> float:
+            return np.exp(-(V_new-V)/(self.T0-self.delta_T*iter))
 
     @staticmethod
     def wheel_select(elements: np.array) -> int:

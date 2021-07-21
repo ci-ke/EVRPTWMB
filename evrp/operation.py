@@ -44,92 +44,6 @@ class Operation:
         return ret_sol
 
     @staticmethod
-    def two_opt_star_arc(solution: Solution, node1: Node, node2: Node) -> list:
-        assert not node1 is node2
-        if isinstance(node1, Customer) and isinstance(node2, Customer):
-            which1, where1, which2, where2 = Operation.find_two_customer(solution, node1, node2)
-            if which1 == which2:
-                return []
-            else:
-                sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
-                return [sol]
-        elif isinstance(node1, Customer) and isinstance(node2, Recharger):
-            which1, where1, recharger2_which_where = Operation.find_customer_recharger(solution, node1, node2)
-            ret_sol = []
-            for which2, where2 in recharger2_which_where:
-                if which1 != which2:
-                    sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
-                    ret_sol.append(sol)
-            return ret_sol
-        elif isinstance(node1, Customer) and isinstance(node2, Depot):
-            which1, where1 = Operation.find_customer(solution, node1)
-            if where1 == len(solution.routes[which1].visit)-2:
-                return []
-            ret_sol = []
-            which2 = 0
-            while which2 < len(solution.routes):
-                if which1 != which2:
-                    where2 = len(solution.routes[which2])-1
-                    sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
-                    ret_sol.append(sol)
-                which2 += 1
-            return ret_sol
-        elif isinstance(node1, Recharger) and isinstance(node2, Customer):
-            which2, where2, recharger1_which_where = Operation.find_customer_recharger(solution, node2, node1)
-            ret_sol = []
-            for which1, where1 in recharger1_which_where:
-                if which1 != which2:
-                    sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
-                    ret_sol.append(sol)
-            return ret_sol
-        elif isinstance(node1, Recharger) and isinstance(node2, Recharger):
-            recharger1_which_where, recharger2_which_where = Operation.find_two_recharger(solution, node1, node2)
-            ret_sol = []
-            for which1, where1 in recharger1_which_where:
-                for which2, where2 in recharger2_which_where:
-                    if which1 != which2:
-                        sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
-                        ret_sol.append(sol)
-            return ret_sol
-        elif isinstance(node1, Recharger) and isinstance(node2, Depot):
-            recharger1_which_where = Operation.find_recharger(solution, node1)
-            ret_sol = []
-            for which1, where1 in recharger1_which_where:
-                which2 = 0
-                while which2 < len(solution.routes):
-                    if which1 != which2:
-                        where2 = len(solution.routes[which2])-1
-                        sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
-                        ret_sol.append(sol)
-                    which2 += 1
-            return ret_sol
-        elif isinstance(node1, Depot) and isinstance(node2, Customer):
-            which2, where2 = Operation.find_customer(solution, node2)
-            if where2 == 1:
-                return []
-            ret_sol = []
-            which1 = 0
-            while which1 < len(solution.routes):
-                if which1 != which2:
-                    sol = Operation.two_opt_star_action(solution, which1, 0, which2, where2-1)
-                    ret_sol.append(sol)
-                which1 += 1
-            return ret_sol
-        elif isinstance(node1, Depot) and isinstance(node2, Recharger):
-            recharger2_which_where = Operation.find_recharger(solution, node2)
-            ret_sol = []
-            which1 = 0
-            while which1 < len(solution.routes):
-                for which2, where2 in recharger2_which_where:
-                    if where2 == 1:
-                        continue
-                    if which1 != which2:
-                        sol = Operation.two_opt_star_action(solution, which1, 0, which2, where2-1)
-                        ret_sol.append(sol)
-                which1 += 1
-            return ret_sol
-
-    @staticmethod
     def relocate_choose(solution: Solution) -> tuple:
         which = random.randint(0, len(solution.routes)-1)
         where = random.randint(1, len(solution.routes[which].visit)-2)
@@ -172,72 +86,6 @@ class Operation:
         return ret_sol
 
     @staticmethod
-    def relocate_arc(solution: Solution, node1: Node, node2: Node) -> list:
-        assert not node1 is node2
-        if isinstance(node1, Depot):
-            return []
-        elif isinstance(node1, Customer) and isinstance(node2, Customer):
-            which1, where1, which2, where2 = Operation.find_two_customer(solution, node1, node2)
-            if which1 == which2 and where2 == where1+1:
-                return []
-            sol = Operation.relocate_action(solution, which1, where1, which2, where2)
-            return [sol]
-        elif isinstance(node1, Customer) and isinstance(node2, Depot):
-            which1, where1 = Operation.find_customer(solution, node1)
-            ret_sol = []
-            which2 = 0
-            while which2 < len(solution.routes):
-                if not (which2 == which1 and where1 == len(solution.routes[which2].visit)-2):
-                    where2 = len(solution.routes[which2].visit)-1
-                    sol = Operation.relocate_action(solution, which1, where1, which2, where2)
-                    ret_sol.append(sol)
-                which2 += 1
-            return ret_sol
-        elif isinstance(node1, Customer) and isinstance(node2, Recharger):
-            which1, where1, recharger2_which_where = Operation.find_customer_recharger(solution, node1, node2)
-            ret_sol = []
-            for which2, where2 in recharger2_which_where:
-                sol = Operation.relocate_action(solution, which1, where1, which2, where2)
-                ret_sol.append(sol)
-            return ret_sol
-        elif isinstance(node1, Recharger) and isinstance(node2, Customer):
-            which2, where2, recharger1_which_where = Operation.find_customer_recharger(solution, node2, node1)
-            ret_sol = []
-            for which1, where1 in recharger1_which_where:
-                sol = Operation.relocate_action(solution, which1, where1, which2, where2)
-                ret_sol.append(sol)
-            return ret_sol
-        elif isinstance(node1, Recharger) and isinstance(node2, Depot):
-            recharger1_which_where = Operation.find_recharger(solution, node1)
-            ret_sol = []
-            if node1.x == node2.x and node1.y == node2.y:
-                for which1, where1 in recharger1_which_where:
-                    sol = solution.copy()
-                    del sol.routes[which1].visit[where1]
-                    sol.routes[which1].remove_successive_recharger()
-                    ret_sol.append(sol)
-                return ret_sol
-            else:
-                for which1, where1 in recharger1_which_where:
-                    which2 = 0
-                    while which2 < len(solution.routes):
-                        if not (which2 == which1 and where1 == len(solution.routes[which2].visit)-2):
-                            where2 = len(solution.routes[which2].visit)-1
-                            sol = Operation.relocate_action(solution, which1, where1, which2, where2)
-                            ret_sol.append(sol)
-                        which2 += 1
-                return ret_sol
-        elif isinstance(node1, Recharger) and isinstance(node2, Recharger):
-            recharger1_which_where, recharger2_which_where = Operation.find_two_recharger(solution, node1, node2)
-            ret_sol = []
-            for which1, where1 in recharger1_which_where:
-                for which2, where2 in recharger2_which_where:
-                    if not (which1 == which2 and where1+1 == where2):
-                        sol = Operation.relocate_action(solution, which1, where1, which2, where2)
-                        ret_sol.append(sol)
-            return ret_sol
-
-    @staticmethod
     def exchange_choose(solution: Solution) -> tuple:
         while True:
             which1 = random.randint(0, len(solution.routes)-1)
@@ -274,38 +122,27 @@ class Operation:
         return ret_sol
 
     @staticmethod
-    def exchange_arc(solution: Solution, node1: Node, node2: Node) -> list:
-        assert not node1 is node2
-        if isinstance(node2, Customer):
-            if isinstance(node1, Customer):
-                which1, where1, which2, where2 = Operation.find_two_customer(solution, node1, node2)
-                if (not isinstance(solution.routes[which1].visit[where1+1], Customer)) or where1 == len(solution.routes[which1])-2 or (which1 == which2 and where2 == where1+1):
-                    return []
-                else:
-                    sol = Operation.exchange_action(solution, which1, where1+1, which2, where2)
-                    return [sol]
-            elif isinstance(node1, Depot):
-                which2, where2 = Operation.find_customer(solution, node2)
-                ret_sol = []
-                which1 = 0
-                while which1 < len(solution.routes):
-                    if isinstance(solution.routes[which1].visit[1], Customer) and not (where2 == 1 and which1 == which2):
-                        sol = Operation.exchange_action(solution, which1, 1, which2, where2)
-                        ret_sol.append(sol)
-                    which1 += 1
-                return ret_sol
-            elif isinstance(node1, Recharger):
-                which2, where2, recharger1_which_where = Operation.find_customer_recharger(solution, node2, node1)
-                ret_sol = []
-                for which1, where1 in recharger1_which_where:
-                    if isinstance(solution.routes[which1].visit[where1+1], Customer) and where1 != len(solution.routes[which1])-2 and not (which1 == which2 and where2 == where1+1):
-                        sol = Operation.exchange_action(solution, which1, where1+1, which2, where2)
-                        ret_sol.append(sol)
-                return ret_sol
-            else:
-                raise Exception('impossible')
+    def stationInRe_choose(solution: Solution, model: Model) -> tuple:
+        which = random.randint(0, len(solution.routes)-1)
+        where = random.randint(1, len(solution.routes[which].visit)-2)
+        while not isinstance(solution.routes[which].visit[where], Customer):
+            which = random.randint(0, len(solution.routes)-1)
+            where = random.randint(1, len(solution.routes[which].visit)-2)
+        recharger = random.choice(model.rechargers)
+        depot = solution.routes[0].visit[0]
+        while recharger.x == depot.x and recharger.y == depot.y and (where == 1 or where == len(solution.routes[which].visit)-2):
+            recharger = random.choice(model.rechargers)
+        return recharger, which, where
+
+    @staticmethod
+    def stationInRe_action(solution: Solution, recharger: Recharger, which: int, where: int) -> Solution:
+        ret_sol = solution.copy()
+        if ret_sol.routes[which].visit[where-1] is recharger:
+            del ret_sol.routes[which].visit[where-1]
         else:
-            return []
+            ret_sol.routes[which].visit.insert(where, recharger)
+        # ret_sol.routes[which].remove_depot_to_recharger0()
+        return ret_sol
 
     @staticmethod
     def two_opt_choose(solution: Solution) -> tuple:
@@ -331,65 +168,6 @@ class Operation:
         ret_sol.routes[which].remove_successive_recharger()
 
         return ret_sol
-
-    @staticmethod
-    def stationInRe_choose(solution: Solution, model: Model) -> tuple:
-        which = random.randint(0, len(solution.routes)-1)
-        where = random.randint(1, len(solution.routes[which].visit)-2)
-        while not isinstance(solution.routes[which].visit[where], Customer):
-            which = random.randint(0, len(solution.routes)-1)
-            where = random.randint(1, len(solution.routes[which].visit)-2)
-        recharger = random.choice(model.rechargers)
-        depot = solution.routes[0].visit[0]
-        while recharger.x == depot.x and recharger.y == depot.y and (where == 1 or where == len(solution.routes[which].visit)-2):
-            recharger = random.choice(model.rechargers)
-        return recharger, which, where
-
-    @staticmethod
-    def stationInRe_action(solution: Solution, recharger: Recharger, which: int, where: int) -> Solution:
-        ret_sol = solution.copy()
-        if ret_sol.routes[which].visit[where-1] is recharger:
-            del ret_sol.routes[which].visit[where-1]
-        else:
-            ret_sol.routes[which].visit.insert(where, recharger)
-        # ret_sol.routes[which].remove_depot_to_recharger0()
-        return ret_sol
-
-    @staticmethod
-    def stationInRe_arc(solution: Solution, node1: Recharger, node2: Node) -> list:
-        assert isinstance(node1, Recharger) and not node1 is node2
-        if isinstance(node2, Customer):
-            which2, where2 = Operation.find_customer(solution, node2)
-            if where2 == 1:
-                depot = solution.routes[0].visit[0]
-                if node1.x == depot.x and node1.y == depot.y:
-                    return []
-            sol = Operation.stationInRe_action(solution, node1, which2, where2)
-            return [sol]
-        elif isinstance(node2, Depot):
-            if node1.x == node2.x and node1.y == node2.y:
-                return []
-            ret_sol = []
-            cur_which = 0
-            while cur_which < len(solution.routes):
-                cur_where = len(solution.routes[cur_which].visit)-1
-                sol = Operation.stationInRe_action(solution, node1, cur_which, cur_where)
-                ret_sol.append(sol)
-                cur_which += 1
-            return ret_sol
-        elif isinstance(node2, Recharger):
-            recharger2_which_where = Operation.find_recharger(solution, node2)
-            ret_sol = []
-            for which2, where2 in recharger2_which_where:
-                if where2 == 1:
-                    depot = solution.routes[0].visit[0]
-                    if node1.x == depot.x and node1.y == depot.y:
-                        continue
-                sol = Operation.stationInRe_action(solution, node1, which2, where2)
-                ret_sol.append(sol)
-            return ret_sol
-        else:
-            raise Exception('impossible')
 
     @staticmethod
     def choose_best_insert(solution: Solution, node: Node, route_indexes: list) -> tuple:
@@ -460,7 +238,7 @@ class Operation:
         solution = solution.copy()
         ready_to_remove = []
         for route in solution.routes:
-            if route.feasible_weight(model.vehicle)[0] and route.feasible_time(model.vehicle)[0] and not route.feasible_battery(model.vehicle)[0]:
+            if route.feasible_capacity(model.vehicle)[0] and route.feasible_time(model.vehicle)[0] and not route.feasible_battery(model.vehicle)[0]:
                 left_fail_index = np.where(route.arrive_remain_battery < 0)[0][0]
                 left = np.where(route.rechargers < left_fail_index)[0]
                 if len(left) != 0:
@@ -610,6 +388,22 @@ class Operation:
         return (left, right)
 
     @staticmethod
+    def find_left_station(route: Route, where: int) -> Node:
+        left_where = where-1
+        while not(isinstance(route.visit[left_where], Recharger)) and not(isinstance(route.visit[left_where], Depot)):
+            left_where -= 1
+        left = route.visit[left_where]
+        return left
+
+    @staticmethod
+    def find_right_station(route: Route, where: int) -> Node:
+        right_where = where+1
+        while not(isinstance(route.visit[right_where], Recharger)) and not(isinstance(route.visit[right_where], Depot)):
+            right_where += 1
+        right = route.visit[right_where]
+        return right
+
+    @staticmethod
     def find_customer(solution: Solution, node: Customer) -> tuple:
         flag = True
         cur_which = 0
@@ -692,3 +486,284 @@ class Operation:
                 where += 1
             which += 1
         return which1, where1, recharger2_which_where
+
+    @staticmethod
+    def two_opt_star_arc(solution: Solution, node1: Node, node2: Node) -> tuple:
+        '''
+        a后的边，与b前的边，去掉，交换后半部分再连起来，路间
+        '''
+        assert not node1 is node2
+        if isinstance(node1, Customer) and isinstance(node2, Customer):
+            which1, where1, which2, where2 = Operation.find_two_customer(solution, node1, node2)
+            if which1 == which2:
+                return [], []
+            else:
+                sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
+                act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
+                return [sol], [act]
+        elif isinstance(node1, Customer) and isinstance(node2, Recharger):
+            which1, where1, recharger2_which_where = Operation.find_customer_recharger(solution, node1, node2)
+            ret_sol = []
+            ret_act = []
+            for which2, where2 in recharger2_which_where:
+                if which1 != which2:
+                    sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
+                    ret_sol.append(sol)
+                    act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
+                    ret_act.append(act)
+            return ret_sol, ret_act
+        elif isinstance(node1, Customer) and isinstance(node2, Depot):
+            which1, where1 = Operation.find_customer(solution, node1)
+            if where1 == len(solution.routes[which1].visit)-2:
+                return []
+            ret_sol = []
+            ret_act = []
+            which2 = 0
+            while which2 < len(solution.routes):
+                if which1 != which2:
+                    where2 = len(solution.routes[which2])-1
+                    sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
+                    ret_sol.append(sol)
+                    act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
+                    ret_act.append(act)
+                which2 += 1
+            return ret_sol, ret_act
+        elif isinstance(node1, Recharger) and isinstance(node2, Customer):
+            which2, where2, recharger1_which_where = Operation.find_customer_recharger(solution, node2, node1)
+            ret_sol = []
+            ret_act = []
+            for which1, where1 in recharger1_which_where:
+                if which1 != which2:
+                    sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
+                    ret_sol.append(sol)
+                    act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
+                    ret_act.append(act)
+            return ret_sol, ret_act
+        elif isinstance(node1, Recharger) and isinstance(node2, Recharger):
+            recharger1_which_where, recharger2_which_where = Operation.find_two_recharger(solution, node1, node2)
+            ret_sol = []
+            ret_act = []
+            for which1, where1 in recharger1_which_where:
+                for which2, where2 in recharger2_which_where:
+                    if which1 != which2:
+                        sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
+                        ret_sol.append(sol)
+                        act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
+                        ret_act.append(act)
+            return ret_sol, ret_act
+        elif isinstance(node1, Recharger) and isinstance(node2, Depot):
+            recharger1_which_where = Operation.find_recharger(solution, node1)
+            ret_sol = []
+            ret_act = []
+            for which1, where1 in recharger1_which_where:
+                which2 = 0
+                while which2 < len(solution.routes):
+                    if which1 != which2:
+                        where2 = len(solution.routes[which2])-1
+                        sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
+                        ret_sol.append(sol)
+                        act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
+                        ret_act.append(act)
+                    which2 += 1
+            return ret_sol, ret_act
+        elif isinstance(node1, Depot) and isinstance(node2, Customer):
+            which2, where2 = Operation.find_customer(solution, node2)
+            if where2 == 1:
+                return []
+            ret_sol = []
+            ret_act = []
+            which1 = 0
+            while which1 < len(solution.routes):
+                if which1 != which2:
+                    sol = Operation.two_opt_star_action(solution, which1, 0, which2, where2-1)
+                    ret_sol.append(sol)
+                    act = ((node1, node2), solution.id[which1], node1, Operation.find_right_station(solution.routes[which1], 0))
+                    ret_act.append(act)
+                which1 += 1
+            return ret_sol, ret_act
+        elif isinstance(node1, Depot) and isinstance(node2, Recharger):
+            recharger2_which_where = Operation.find_recharger(solution, node2)
+            ret_sol = []
+            ret_act = []
+            which1 = 0
+            while which1 < len(solution.routes):
+                for which2, where2 in recharger2_which_where:
+                    if where2 == 1:
+                        continue
+                    if which1 != which2:
+                        sol = Operation.two_opt_star_action(solution, which1, 0, which2, where2-1)
+                        ret_sol.append(sol)
+                        act = ((node1, node2), solution.id[which1], node1, Operation.find_right_station(solution.routes[which1], 1))
+                        ret_act.append(act)
+                which1 += 1
+            return ret_sol, ret_act
+
+    @staticmethod
+    def relocate_arc(solution: Solution, node1: Node, node2: Node) -> tuple:
+        '''
+        去掉a，插入到b前，路间路内，客户与电站
+        '''
+        assert not node1 is node2
+        if isinstance(node1, Depot):
+            return [], []
+        elif isinstance(node1, Customer) and isinstance(node2, Customer):
+            which1, where1, which2, where2 = Operation.find_two_customer(solution, node1, node2)
+            if which1 == which2 and where2 == where1+1:
+                return [], []
+            sol = Operation.relocate_action(solution, which1, where1, which2, where2)
+            act = ((node1, node2), solution.id[which2], *Operation.find_left_right_station(solution.routes[which2], where2))
+            return [sol], [act]
+        elif isinstance(node1, Customer) and isinstance(node2, Depot):
+            which1, where1 = Operation.find_customer(solution, node1)
+            ret_sol = []
+            ret_act = []
+            which2 = 0
+            while which2 < len(solution.routes):
+                if not (which2 == which1 and where1 == len(solution.routes[which2].visit)-2):
+                    where2 = len(solution.routes[which2].visit)-1
+                    sol = Operation.relocate_action(solution, which1, where1, which2, where2)
+                    act = ((node1, node2), solution.id[which2], Operation.find_left_station(solution.routes[which2], where2), node2)
+                    ret_sol.append(sol)
+                    ret_act.append(act)
+                which2 += 1
+            return ret_sol, ret_act
+        elif isinstance(node1, Customer) and isinstance(node2, Recharger):
+            which1, where1, recharger2_which_where = Operation.find_customer_recharger(solution, node1, node2)
+            ret_sol = []
+            ret_act = []
+            for which2, where2 in recharger2_which_where:
+                if not (which1 == which2 and where2 == where1+1):
+                    sol = Operation.relocate_action(solution, which1, where1, which2, where2)
+                    ret_sol.append(sol)
+                    act = ((node1, node2), solution.id[which2], *Operation.find_left_right_station(solution.routes[which2], where2))
+                    ret_act.append(act)
+            return ret_sol, ret_act
+        elif isinstance(node1, Recharger) and isinstance(node2, Customer):
+            which2, where2, recharger1_which_where = Operation.find_customer_recharger(solution, node2, node1)
+            ret_sol = []
+            ret_act = []
+            for which1, where1 in recharger1_which_where:
+                if not (which1 == which2 and where2 == where1+1):
+                    sol = Operation.relocate_action(solution, which1, where1, which2, where2)
+                    ret_sol.append(sol)
+                    act = ((node1, node2), solution.id[which2], *Operation.find_left_right_station(solution.routes[which2], where2))
+                    ret_act.append(act)
+            return ret_sol, ret_act
+        elif isinstance(node1, Recharger) and isinstance(node2, Depot):
+            if node1.x == node2.x and node1.y == node2.y:
+                return [], []
+            recharger1_which_where = Operation.find_recharger(solution, node1)
+            ret_sol = []
+            ret_act = []
+            for which1, where1 in recharger1_which_where:
+                which2 = 0
+                while which2 < len(solution.routes):
+                    if not (which2 == which1 and where1 == len(solution.routes[which2].visit)-2):
+                        where2 = len(solution.routes[which2].visit)-1
+                        sol = Operation.relocate_action(solution, which1, where1, which2, where2)
+                        ret_sol.append(sol)
+                        act = ((node1, node2), solution.id[which2], Operation.find_left_station(solution.routes[which2], where2), node2)
+                        ret_act.append(act)
+                    which2 += 1
+            return ret_sol, ret_act
+        elif isinstance(node1, Recharger) and isinstance(node2, Recharger):
+            recharger1_which_where, recharger2_which_where = Operation.find_two_recharger(solution, node1, node2)
+            ret_sol = []
+            ret_act = []
+            for which1, where1 in recharger1_which_where:
+                for which2, where2 in recharger2_which_where:
+                    if not (which1 == which2 and where1+1 == where2):
+                        sol = Operation.relocate_action(solution, which1, where1, which2, where2)
+                        ret_sol.append(sol)
+                        act = ((node1, node2), solution.id[which2], *Operation.find_left_right_station(solution.routes[which2], where2))
+                        ret_act.append(act)
+            return ret_sol, ret_act
+
+    @staticmethod
+    def exchange_arc(solution: Solution, node1: Node, node2: Node) -> tuple:
+        '''
+        a后与b交换，路间路内，只有客户
+        '''
+        assert not node1 is node2
+        if isinstance(node2, Customer):
+            if isinstance(node1, Customer):
+                which1, where1, which2, where2 = Operation.find_two_customer(solution, node1, node2)
+                if (not isinstance(solution.routes[which1].visit[where1+1], Customer)) or where1 == len(solution.routes[which1])-2 or (which1 == which2 and where2 == where1+1):
+                    return [], []
+                else:
+                    sol = Operation.exchange_action(solution, which1, where1+1, which2, where2)
+                    act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
+                    return [sol], [act]
+            elif isinstance(node1, Depot):
+                which2, where2 = Operation.find_customer(solution, node2)
+                ret_sol = []
+                ret_act = []
+                which1 = 0
+                while which1 < len(solution.routes):
+                    if isinstance(solution.routes[which1].visit[1], Customer) and not (where2 == 1 and which1 == which2):
+                        sol = Operation.exchange_action(solution, which1, 1, which2, where2)
+                        ret_sol.append(sol)
+                        act = ((node1, node2), solution.id[which1], node1, Operation.find_right_station(solution.routes[which1], 0))
+                        ret_act.append(act)
+                    which1 += 1
+                return ret_sol, ret_act
+            elif isinstance(node1, Recharger):
+                which2, where2, recharger1_which_where = Operation.find_customer_recharger(solution, node2, node1)
+                ret_sol = []
+                ret_act = []
+                for which1, where1 in recharger1_which_where:
+                    if isinstance(solution.routes[which1].visit[where1+1], Customer) and where1 != len(solution.routes[which1])-2 and not (which1 == which2 and where2 == where1+1):
+                        sol = Operation.exchange_action(solution, which1, where1+1, which2, where2)
+                        ret_sol.append(sol)
+                        act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
+                        ret_act.append(act)
+                return ret_sol, ret_act
+            else:
+                raise Exception('impossible')
+        else:
+            return [], []
+
+    @staticmethod
+    def stationInRe_arc(solution: Solution, node1: Recharger, node2: Node) -> tuple:
+        assert not node1 is node2
+        if not isinstance(node1, Recharger):
+            return [], []
+        if isinstance(node2, Customer):
+            which2, where2 = Operation.find_customer(solution, node2)
+            if where2 == 1:
+                depot = solution.routes[0].visit[0]
+                if node1.x == depot.x and node1.y == depot.y:
+                    return [], []
+            sol = Operation.stationInRe_action(solution, node1, which2, where2)
+            act = ((node1, node2), solution.id[which2], *Operation.find_left_right_station(solution.routes[which2], where2))
+            return [sol], [act]
+        elif isinstance(node2, Depot):
+            if node1.x == node2.x and node1.y == node2.y:
+                return []
+            ret_sol = []
+            ret_act = []
+            cur_which = 0
+            while cur_which < len(solution.routes):
+                cur_where = len(solution.routes[cur_which].visit)-1
+                sol = Operation.stationInRe_action(solution, node1, cur_which, cur_where)
+                ret_sol.append(sol)
+                act = ((node1, node2), solution.id[cur_which], Operation.find_left_station(solution.routes[cur_which], cur_where), node2)
+                ret_act.append(act)
+                cur_which += 1
+            return ret_sol, ret_act
+        elif isinstance(node2, Recharger):
+            recharger2_which_where = Operation.find_recharger(solution, node2)
+            ret_sol = []
+            ret_act = []
+            for which2, where2 in recharger2_which_where:
+                if where2 == 1:
+                    depot = solution.routes[0].visit[0]
+                    if node1.x == depot.x and node1.y == depot.y:
+                        continue
+                sol = Operation.stationInRe_action(solution, node1, which2, where2)
+                ret_sol.append(sol)
+                act = ((node1, node2), solution.id[which2], *Operation.find_left_right_station(solution.routes[which2], where2))
+                ret_act.append(act)
+            return ret_sol, ret_act
+        else:
+            raise Exception('impossible')
