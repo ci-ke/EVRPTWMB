@@ -2,8 +2,6 @@ import os
 import pickle
 import collections
 
-from numpy.lib.function_base import select
-
 from .model import *
 from .util import *
 from .operation import *
@@ -35,6 +33,7 @@ class VNS_TS:
     possible_arc = {}
     SA = None
     penalty_update_flag = []
+    best_S = None
 
     def __init__(self, model: Model, **param) -> None:
         self.model = model
@@ -209,23 +208,61 @@ class VNS_TS:
             for m in range(1, max+1):
                 self.vns_neighbour.append((R, m))
 
-    @staticmethod
-    def get_tabu_attr(solution: Solution, node1: Node, node2: Node) -> tuple:
-        pass
-
     def tabu_search(self, S: Solution) -> Solution:
         best_S = S
-        best_val = VNS_TS.get_objective(S, self.model, self.penalty)
+        #best_val = VNS_TS.get_objective(S, self.model, self.penalty)
         select_arc = self.select_possible_arc(50)
+        tabu_list = {}
         for _ in range(self.eta_tabu):
             local_best_S = None
-            local_best_val = float('inf')
-            neighbor = []
+            local_best_act = None
             for arc in select_arc:
-                neighbor.extend(Operation.two_opt_star_arc(S, *arc))
-                neighbor.extend(Operation.relocate_arc(S, *arc))
-                neighbor.extend(Operation.exchange_arc(S, *arc))
-                neighbor.extend(Operation.stationInRe_arc(S, *arc))
+                for neighbor_opt in [Operation.two_opt_star_arc, Operation.relocate_arc, Operation.exchange_arc, Operation.stationInRe_arc]:
+                    neighbor_sol, neighbor_act = neighbor_opt(S, *arc)
+                    for sol, act in zip(neighbor_sol, neighbor_act):
+                        if tabu_list.get(act, 0) == 0:
+                            if self.compare_better(sol, local_best_S):
+                                local_best_S = sol
+                                local_best_act = act
+            for key in tabu_list:
+                if tabu_list[key] >= 1:
+                    tabu_list[key] -= 1
+            tabu_list[local_best_act] = random.randint(self.nu_min, self.nu_max)
+            if self.compare_better(local_best_S, best_S):
+                best_S = local_best_S
+            S = local_best_S
+        return best_S
+
+    def compare_better(self, solution1: Solution, solution2: Solution) -> bool:
+        if solution2 is None:
+            return True
+        s1_val = VNS_TS.get_objective(solution1, self.model, self.penalty)
+        s2_val = VNS_TS.get_objective(solution2, self.model, self.penalty)
+        if solution1.feasible(self.model):
+            if len(solution1) < len(solution2) or (len(solution1) == len(solution2) and s1_val < s2_val):
+                return True
+        else:
+            if s1_val < s2_val:
+                return True
+        return False
+
+    def compare_better2(self, solution1: Solution, solution2: Solution) -> bool:
+        if solution2 is None:
+            return True
+        s1_val = VNS_TS.get_objective(solution1, self.model, self.penalty)
+        s2_val = VNS_TS.get_objective(solution2, self.model, self.penalty)
+        if solution1.feasible(self.model) and solution2.feasible(self.model):
+            if len(solution1) < len(solution2) or (len(solution1) == len(solution2) and s1_val < s2_val):
+                return True
+        elif solution1.feasible(self.model) and not solution2.feasible(self.model):
+            return True
+        elif not solution1.feasible(self.model) and solution2.feasible(self.model):
+            return False
+        elif not solution1.feasible(self.model) and not solution2.feasible(self.model):
+            if s1_val < s2_val:
+                return True
+            else:
+                return False
 
     def acceptSA(self, S2: Solution, S: Solution, i) -> bool:
         S2_objective = VNS_TS.get_objective(S2, self.model, self.penalty)
@@ -243,12 +280,13 @@ class VNS_TS:
         i = 0
         feasibilityPhase = True
         while feasibilityPhase or i < self.eta_dist:
+            print(i, S.feasible(self.model), S.sum_distance())
             self.update_penalty(S)
             S1 = Operation.cyclic_exchange(S, *self.vns_neighbour[k])
             S2 = self.tabu_search(S1)
-            if self.acceptSA(S2, S, i):
+            # if self.acceptSA(S2, S, i):
+            if self.compare_better2(S2, S):
                 S = S2
-                print(i, S.feasible(self.model), S.sum_distance())
                 k = 0
             else:
                 k = (k+1) % len(self.vns_neighbour)
@@ -290,11 +328,11 @@ class DEMA:
             assert hasattr(self, key)
             setattr(self, key, value)
 
-    @staticmethod
+    @ staticmethod
     def get_objective_route(route: Route, vehicle: Vehicle, penalty: tuple) -> float:
         return route.sum_distance()+penalty[0]*VNS_TS.penalty_capacity(route, vehicle)+penalty[1]*VNS_TS.penalty_time(route, vehicle)+penalty[2]*VNS_TS.penalty_battery(route, vehicle)
 
-    @staticmethod
+    @ staticmethod
     def get_objective(solution: Solution, model: Model, penalty: tuple) -> float:
         if solution.objective is None:
             ret = 0
@@ -305,7 +343,7 @@ class DEMA:
         else:
             return solution.objective
 
-    @staticmethod
+    @ staticmethod
     def overlapping_degree(solution1: Solution, solution2: Solution) -> float:
         sol1arcs = []
         sol2arcs = []
@@ -321,7 +359,7 @@ class DEMA:
                 num += 2
         return num/(len(sol1arcs)+len(sol2arcs))
 
-    @staticmethod
+    @ staticmethod
     def overlapping_degree_population(solution: Solution, population: list) -> float:
         sum = 0
         for p in population:
@@ -455,7 +493,7 @@ class DEMA:
 
             P_child.append(S)
 
-        #self.penalty = penalty_save
+        # self.penalty = penalty_save
         return P_child
 
     def ISSD(self, P: list, iter: int) -> list:

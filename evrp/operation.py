@@ -515,7 +515,7 @@ class Operation:
         elif isinstance(node1, Customer) and isinstance(node2, Depot):
             which1, where1 = Operation.find_customer(solution, node1)
             if where1 == len(solution.routes[which1].visit)-2:
-                return []
+                return [], []
             ret_sol = []
             ret_act = []
             which2 = 0
@@ -569,7 +569,7 @@ class Operation:
         elif isinstance(node1, Depot) and isinstance(node2, Customer):
             which2, where2 = Operation.find_customer(solution, node2)
             if where2 == 1:
-                return []
+                return [], []
             ret_sol = []
             ret_act = []
             which1 = 0
