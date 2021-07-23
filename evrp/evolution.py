@@ -1,5 +1,3 @@
-import os
-import pickle
 import collections
 
 from .model import *
@@ -31,9 +29,10 @@ class VNS_TS:
     vns_neighbour = []
     frequency = {}
     possible_arc = {}
-    SA = None
+    SA_dist = None
+    SA_feas = None
     penalty_update_flag = []
-    best_S = None
+    S_best = None
 
     def __init__(self, model: Model, **param) -> None:
         self.model = model
@@ -41,7 +40,8 @@ class VNS_TS:
             assert hasattr(self, key)
             setattr(self, key, value)
 
-        self.SA = Util.SA(self.Delta_SA, self.eta_dist)
+        self.SA_dist = Util.SA(self.Delta_SA, self.eta_dist)
+        self.SA_feas = Util.SA(self.Delta_SA, self.eta_feas)
         self.penalty_update_flag = [collections.deque(maxlen=self.eta_penalty), collections.deque(maxlen=self.eta_penalty), collections.deque(maxlen=self.eta_penalty)]
         self.calculate_possible_arc()
 
@@ -76,19 +76,15 @@ class VNS_TS:
         return np.abs(np.sum(route.arrive_remain_battery, where=route.arrive_remain_battery < 0))
 
     @staticmethod
-    def get_objective_route(route: Route, vehicle: Vehicle, penalty: tuple) -> float:
+    def get_objective_route(route: Route, vehicle: Vehicle, penalty: list) -> float:
         return route.sum_distance()+penalty[0]*VNS_TS.penalty_capacity(route, vehicle)+penalty[1]*VNS_TS.penalty_time(route, vehicle)+penalty[2]*VNS_TS.penalty_battery(route, vehicle)
 
     @staticmethod
-    def get_objective(solution: Solution, model: Model, penalty: tuple) -> float:
-        if solution.objective is None:
-            ret = 0
-            for route in solution.routes:
-                ret += VNS_TS.get_objective_route(route, model.vehicle, penalty)
-            solution.objective = ret
-            return solution.objective
-        else:
-            return solution.objective
+    def get_objective(solution: Solution, model: Model, penalty: list) -> float:
+        ret = 0
+        for route in solution.routes:
+            ret += VNS_TS.get_objective_route(route, model.vehicle, penalty)
+        return ret
 
     def calculate_possible_arc(self) -> None:
         self.model.find_nearest_station()
@@ -184,7 +180,7 @@ class VNS_TS:
             building_route_visit.insert(decide_insert_place, choose[choose_index])
 
             try_route = Route(building_route_visit)
-            if try_route.feasible_capacity(self.model.vehicle) and try_route.feasible_battery(self.model.vehicle):
+            if try_route.feasible_capacity(self.model.vehicle)[0] and try_route.feasible_battery(self.model.vehicle)[0]:
                 del choose[choose_index]
             else:
                 if len(routes) < self.model.max_vehicle-1:
@@ -238,19 +234,6 @@ class VNS_TS:
             return True
         s1_val = VNS_TS.get_objective(solution1, self.model, self.penalty)
         s2_val = VNS_TS.get_objective(solution2, self.model, self.penalty)
-        if solution1.feasible(self.model):
-            if len(solution1) < len(solution2) or (len(solution1) == len(solution2) and s1_val < s2_val):
-                return True
-        else:
-            if s1_val < s2_val:
-                return True
-        return False
-
-    def compare_better2(self, solution1: Solution, solution2: Solution) -> bool:
-        if solution2 is None:
-            return True
-        s1_val = VNS_TS.get_objective(solution1, self.model, self.penalty)
-        s2_val = VNS_TS.get_objective(solution2, self.model, self.penalty)
         if solution1.feasible(self.model) and solution2.feasible(self.model):
             if len(solution1) < len(solution2) or (len(solution1) == len(solution2) and s1_val < s2_val):
                 return True
@@ -264,12 +247,17 @@ class VNS_TS:
             else:
                 return False
 
-    def acceptSA(self, S2: Solution, S: Solution, i) -> bool:
+    def acceptSA_feas(self, S2: Solution, S: Solution, i) -> bool:
         S2_objective = VNS_TS.get_objective(S2, self.model, self.penalty)
         S_objective = VNS_TS.get_objective(S, self.model, self.penalty)
-        if S2.feasible(self.model) and (len(S2) < len(S) or (len(S2) == len(S) and S2_objective < S_objective)):
+        if random.random() < self.SA_feas.probability(S2_objective, S_objective, i):
             return True
-        if random.random() < self.SA.probability(S2_objective, S_objective, i):
+        return False
+
+    def acceptSA_dist(self, S2: Solution, S: Solution, i) -> bool:
+        S2_objective = VNS_TS.get_objective(S2, self.model, self.penalty)
+        S_objective = VNS_TS.get_objective(S, self.model, self.penalty)
+        if random.random() < self.SA_dist.probability(S2_objective, S_objective, i):
             return True
         return False
 
@@ -280,16 +268,20 @@ class VNS_TS:
         i = 0
         feasibilityPhase = True
         while feasibilityPhase or i < self.eta_dist:
-            print(i, S.feasible(self.model), S.sum_distance())
+            if self.compare_better(S, self.S_best):
+                self.S_best = S
             self.update_penalty(S)
+
+            print(i, S.feasible(self.model), len(S), VNS_TS.get_objective(S, self.model, self.penalty))
+
             S1 = Operation.cyclic_exchange(S, *self.vns_neighbour[k])
             S2 = self.tabu_search(S1)
-            # if self.acceptSA(S2, S, i):
-            if self.compare_better2(S2, S):
+            if self.compare_better(S2, S) or (feasibilityPhase and self.acceptSA_feas(S2, S, i)) or (not feasibilityPhase and self.acceptSA_dist(S2, S, i)):
                 S = S2
                 k = 0
             else:
                 k = (k+1) % len(self.vns_neighbour)
+
             if feasibilityPhase:
                 if not S.feasible(self.model):
                     if i == self.eta_feas:
@@ -299,6 +291,7 @@ class VNS_TS:
                     feasibilityPhase = False
                     i = -1
             i += 1
+
         return S
 
 
@@ -307,7 +300,7 @@ class DEMA:
     model = None
     penalty = (15, 5, 10)
     maxiter_evo = 100
-    size = 30
+    size = 10
     infeasible_proportion = 0.25
     sigma = (1, 5, 10)
     theta = 0.7
@@ -529,7 +522,13 @@ class DEMA:
 
         return P
 
-    def tabu_search(self, solution: Solution, iter_num: int, neighbor_num: int) -> Solution:
+    def tabu_search(self, solution: Solution) -> Solution:
+        if getattr(self, 'vnsts', None) is None:
+            self.vnsts = VNS_TS(self.model)
+        sol = self.vnsts.tabu_search(solution)
+        return sol
+
+    def tabu_search_abandon(self, solution: Solution, iter_num: int, neighbor_num: int) -> Solution:
         best_sol = solution
         best_val = DEMA.get_objective(solution, self.model, self.penalty)
         tabu_list = {}
@@ -608,8 +607,8 @@ class DEMA:
         if self.last_local_search >= self.local_search_step:
             retP = []
             for i, sol in enumerate(P):
-                print(iter, i)
-                retP.append(self.tabu_search(sol, int(self.maxiter_tabu_mul*len(self.model.customers)), int(self.max_neighbour_mul*len(self.model.customers))))
+                print(iter, 'tabu', i)
+                retP.append(self.tabu_search(sol))
             self.last_local_search = 0
             return retP
         elif self.last_charge_modify >= self.charge_modify_step:
@@ -642,21 +641,9 @@ class DEMA:
         P = self.initialization()
         self.update_S(P)
         for iter in range(self.maxiter_evo):
-            print(iter, self.min_cost)
+            print(iter, len(self.S_best), self.min_cost)
             P_child = self.ACO_GM(P)
             P = self.ISSD(P+P_child, iter)
             P = self.MVS(P, iter)
             self.update_S(P)
         return self.S_best, self.min_cost
-
-    def output_to_file(self, suffix: str = '') -> None:
-        if not os.path.exists('result'):
-            os.mkdir('result')
-        filename = self.model.data_file.split('/')[-1].split('.')[0]
-        output_file = open('result/'+filename+suffix+'.txt', 'a')
-        output_file.write(str(self.S_best)+'\n'+str(self.min_cost)+'\n\n')
-        output_file.close()
-
-        pickle_file = open('result/'+filename+suffix+'.pickle', 'wb')
-        pickle.dump(self.S_best, pickle_file)
-        pickle_file.close()

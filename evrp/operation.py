@@ -1,3 +1,6 @@
+import os
+import pickle
+
 from .model import *
 from .util import *
 
@@ -767,3 +770,16 @@ class Operation:
             return ret_sol, ret_act
         else:
             raise Exception('impossible')
+
+    @staticmethod
+    def output_to_file(model: Model, S: Solution, suffix: str = '') -> None:
+        if not os.path.exists('result'):
+            os.mkdir('result')
+        filename = model.data_file.split('/')[-1].split('.')[0]
+        output_file = open('result/'+filename+suffix+'.txt', 'a')
+        output_file.write(str(S)+'\n'+str(S.sum_distance())+'\n'+str(S.feasible_detail(model))+'\n\n')
+        output_file.close()
+
+        pickle_file = open('result/'+filename+suffix+'.pickle', 'wb')
+        pickle.dump(S, pickle_file)
+        pickle_file.close()

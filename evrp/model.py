@@ -191,7 +191,7 @@ class Route:
         #    arrive_time[i:] += ready_time[i]-arrive_time[i]
         self.arrive_time = arrive_time
 
-    def feasible_capacity(self, vehicle: Vehicle) -> bool:
+    def feasible_capacity(self, vehicle: Vehicle) -> tuple:
         if self.arrive_load_weight is None:
             self.cal_load_weight(vehicle)
         if True in (self.arrive_load_weight > vehicle.capacity):  # 这里不加括号会有错误，in的优先级高
@@ -511,10 +511,10 @@ class Solution:
             route.clear_status()
 
     def addVehicle(self, model: Model) -> None:
-        if len(self.routes) < model.max_vehicle:
-            self.routes.append(Route([self.routes[0].visit[0], self.routes[0].visit[0]]))
-            self.id.append(self.next_id)
-            self.next_id += 1
+        #if len(self.routes) < model.max_vehicle:
+        self.routes.append(Route([self.routes[0].visit[0], self.routes[0].visit[0]]))
+        self.id.append(self.next_id)
+        self.next_id += 1
 
     def remove_empty_route(self) -> None:
         i = 0
