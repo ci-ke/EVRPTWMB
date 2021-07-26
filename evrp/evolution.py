@@ -215,6 +215,8 @@ class VNS_TS:
             for arc in select_arc:
                 for neighbor_opt in [Operation.two_opt_star_arc, Operation.relocate_arc, Operation.exchange_arc, Operation.stationInRe_arc]:
                     neighbor_sol, neighbor_act = neighbor_opt(S, *arc)
+                    for sol in neighbor_sol:
+                        assert sol.serve_all_customer(self.model)
                     for sol, act in zip(neighbor_sol, neighbor_act):
                         if tabu_list.get(act, 0) == 0:
                             if self.compare_better(sol, local_best_S):
@@ -410,20 +412,33 @@ class DEMA:
 
     def initialization(self) -> list:
         population = []
-        for _ in range(self.size):
+        while len(population) < self.size:
+            reroll = False
+            times = 0
             sol = self.random_create()
+            assert sol.serve_all_customer(self.model)
             while True:
+                if times > 10:
+                    reroll = True
+                    break
                 fes_dic = sol.feasible_detail(self.model)
                 for _, value in fes_dic.items():
                     if value[1] == 'battery':
                         sol = Operation.charging_modification(sol, self.model)
+                        assert sol.serve_all_customer(self.model)
+                        times += 1
                         break
                     if value[1] == 'time':
                         sol = Operation.fix_time(sol, self.model)
+                        assert sol.serve_all_customer(self.model)
+                        times += 1
                         break
                 else:
                     sol.renumber_id()
                     break
+            if reroll:
+                reroll = False
+                continue
             population.append(sol)
         return population
 
@@ -471,9 +486,11 @@ class DEMA:
             if sel == 0:
                 S_parent = random.choice(P_parent)
                 S = Operation.ACO_GM_cross1(S_parent)
+                assert S.serve_all_customer(self.model)
             elif sel == 1:
                 S_parent, S2 = random.sample(P_parent, 2)
                 S = Operation.ACO_GM_cross2(S_parent, S2)
+                assert S.serve_all_customer(self.model)
 
             cross_call_times[sel] += 1
             cost = DEMA.get_objective(S, self.model, self.penalty)

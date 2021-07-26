@@ -15,11 +15,12 @@ class Operation:
         actual_select = [None]*len(solution.routes)
         for route_i in sel:
             actual_select[route_i] = solution.routes[route_i].random_segment_range(max)
+
         ret_sol = solution.copy()
         for sel_i in range(len(sel)):
             ret_sol.routes[sel[sel_i]].visit[actual_select[sel[sel_i]][0]:actual_select[sel[sel_i]][1]] = solution.routes[sel[(sel_i+1) % len(sel)]].visit[actual_select[sel[(sel_i+1) % len(sel)]][0]:actual_select[sel[(sel_i+1) % len(sel)]][1]]
 
-        ret_sol.remove_empty_route()
+        # ret_sol.remove_empty_route()
 
         for route in ret_sol.routes:
             route.remove_depot_to_recharger0()
@@ -39,10 +40,11 @@ class Operation:
         ret_sol.routes[second_which].remove_depot_to_recharger0()
         ret_sol.routes[second_which].remove_successive_recharger()
 
-        if ret_sol.routes[first_which].no_customer():
-            ret_sol.remove_route_index(first_which)
-        elif ret_sol.routes[second_which].no_customer():
-            ret_sol.remove_route_index(second_which)
+        # if ret_sol.routes[first_which].no_customer():
+        #    ret_sol.remove_route_index(first_which)
+        # elif ret_sol.routes[second_which].no_customer():
+        #    ret_sol.remove_route_index(second_which)
+        ret_sol.remove_empty_route()
 
         return ret_sol
 
@@ -73,8 +75,8 @@ class Operation:
         if new_which != which:
             ret_sol[new_which].visit.insert(new_where, solution.routes[which].visit[where])
             del ret_sol.routes[which].visit[where]
-            if ret_sol.routes[which].no_customer():
-                ret_sol.remove_route_index(which)
+            # if ret_sol.routes[which].no_customer():
+            #    ret_sol.remove_route_index(which)
         else:
             ret_sol[which].visit.insert(new_where, solution.routes[which].visit[where])
             if new_where > where:
@@ -82,6 +84,7 @@ class Operation:
             else:
                 del ret_sol.routes[which].visit[where+1]
 
+        ret_sol.remove_empty_route()
         for route in ret_sol.routes:
             route.remove_depot_to_recharger0()
             route.remove_successive_recharger()
@@ -116,8 +119,8 @@ class Operation:
         ret_sol = solution.copy()
         ret_sol.routes[which1].visit[where1] = solution.routes[which2].visit[where2]
         ret_sol.routes[which2].visit[where2] = solution.routes[which1].visit[where1]
-        ret_sol.remove_empty_route()
 
+        ret_sol.remove_empty_route()
         for route in ret_sol:
             route.remove_depot_to_recharger0()
             route.remove_successive_recharger()
@@ -145,6 +148,7 @@ class Operation:
         else:
             ret_sol.routes[which].visit.insert(where, recharger)
         # ret_sol.routes[which].remove_depot_to_recharger0()
+        ret_sol.remove_empty_route()
         return ret_sol
 
     @staticmethod
@@ -193,8 +197,8 @@ class Operation:
 
     @staticmethod
     def ACO_GM_cross1(solution: Solution) -> Solution:
+        solution = solution.copy()
         if len(solution.routes) > 1:
-            solution = solution.copy()
             avg_dis = np.zeros(len(solution.routes), dtype=float)
             for i, route in enumerate(solution.routes):
                 avg_dis[i] = route.avg_distance()
@@ -220,18 +224,24 @@ class Operation:
             avg_dis_reciprocal[i] = 1/route.avg_distance()
         avg_dis_reciprocal = avg_dis_reciprocal/np.sum(avg_dis_reciprocal)
         select = Util.wheel_select(avg_dis_reciprocal)
+
+        visit_cus_list = []
         for node in solution2.routes[select].visit[1:-1]:
             if isinstance(node, Customer):
-                for route in solution1.routes:
-                    if node in route:
-                        route.visit.remove(node)
-                        break
-        visit_list = solution2.routes[select].visit[1:-1]
-        random.shuffle(visit_list)
-        for node in visit_list:
-            if isinstance(node, Customer):
-                to_route, insert_place_to_route = Operation.choose_best_insert(solution1, node, list(range(len(solution1.routes))))
-                solution1.routes[to_route].visit.insert(insert_place_to_route, node)
+                visit_cus_list.append(node)
+
+        for route in solution1.routes:
+            i = 1
+            while i < len(route.visit)-1:
+                if route.visit[i] in visit_cus_list:
+                    del route.visit[i]
+                else:
+                    i += 1
+
+        random.shuffle(visit_cus_list)
+        for node in visit_cus_list:
+            to_route, insert_place_to_route = Operation.choose_best_insert(solution1, node, list(range(len(solution1.routes))))
+            solution1.routes[to_route].visit.insert(insert_place_to_route, node)
         solution1.remove_empty_route()
         solution1.clear_status()
         return solution1
@@ -369,8 +379,10 @@ class Operation:
         for route in solution.routes:
             if route.feasible_time(model.vehicle)[0] == False:
                 cut = route.feasible_time(model.vehicle)[1]
+                if cut == len(route.visit)-1:
+                    cut -= 1
                 new_route = [model.depot]+route.visit[cut:]
-                route.visit[cut-1:] = [model.depot]
+                route.visit[cut:] = [model.depot]
                 route.clear_status()
                 solution.add_route(Route(new_route))
 

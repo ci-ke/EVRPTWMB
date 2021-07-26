@@ -511,7 +511,7 @@ class Solution:
             route.clear_status()
 
     def addVehicle(self, model: Model) -> None:
-        #if len(self.routes) < model.max_vehicle:
+        # if len(self.routes) < model.max_vehicle:
         self.routes.append(Route([self.routes[0].visit[0], self.routes[0].visit[0]]))
         self.id.append(self.next_id)
         self.next_id += 1
@@ -550,3 +550,24 @@ class Solution:
     def get_route_from_id(self, id: int) -> Route:
         index = self.id.index(id)
         return self.routes[index]
+
+    def get_actual_routes(self) -> Route:
+        num = 0
+        for route in self.routes:
+            if not route.no_customer():
+                num += 1
+        return num
+
+    def serve_all_customer(self, model: Model) -> bool:
+        served_cus_list = []
+        for route in self.routes:
+            for node in route.visit[1:-1]:
+                if isinstance(node, Customer):
+                    served_cus_list.append(node)
+        served_cus_set = set(served_cus_list)
+        if len(served_cus_list) != len(served_cus_set):
+            return False
+        if len(served_cus_set) == len(model.customers):
+            return True
+        else:
+            return False
