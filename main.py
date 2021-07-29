@@ -8,7 +8,7 @@ random.seed(2021)
 
 file5 = 'data/small_evrptw_instances/Cplex5er/rc105C5.txt'
 file10 = 'data/small_evrptw_instances/Cplex10er/r102C10.txt'
-file15 = 'data/small_evrptw_instances/Cplex15er/rc103C15.txt'
+file15 = 'data/small_evrptw_instances/Cplex15er/rc108C15.txt'
 file100 = 'data/evrptw_instances/c101_21.txt'
 
 model = Model(file15, max_vehicle=100)

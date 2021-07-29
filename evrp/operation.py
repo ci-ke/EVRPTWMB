@@ -20,7 +20,7 @@ class Operation:
         for sel_i in range(len(sel)):
             ret_sol.routes[sel[sel_i]].visit[actual_select[sel[sel_i]][0]:actual_select[sel[sel_i]][1]] = solution.routes[sel[(sel_i+1) % len(sel)]].visit[actual_select[sel[(sel_i+1) % len(sel)]][0]:actual_select[sel[(sel_i+1) % len(sel)]][1]]
 
-        # ret_sol.remove_empty_route()
+        ret_sol.remove_empty_route()
 
         for route in ret_sol.routes:
             route.remove_depot_to_recharger0()
@@ -392,30 +392,42 @@ class Operation:
 
     @staticmethod
     def find_left_right_station(route: Route, where: int) -> tuple:
-        left_where = where-1
-        while not(isinstance(route.visit[left_where], Recharger)) and not(isinstance(route.visit[left_where], Depot)):
-            left_where -= 1
-        left = route.visit[left_where]
-        right_where = where+1
-        while not(isinstance(route.visit[right_where], Recharger)) and not(isinstance(route.visit[right_where], Depot)):
-            right_where += 1
-        right = route.visit[right_where]
+        if where == 0:
+            left = route.visit[0]
+        else:
+            left_where = where-1
+            while not(isinstance(route.visit[left_where], Recharger)) and not(isinstance(route.visit[left_where], Depot)):
+                left_where -= 1
+            left = route.visit[left_where]
+        if where == len(route.visit)-1:
+            right = route.visit[-1]
+        else:
+            right_where = where+1
+            while not(isinstance(route.visit[right_where], Recharger)) and not(isinstance(route.visit[right_where], Depot)):
+                right_where += 1
+            right = route.visit[right_where]
         return (left, right)
 
     @staticmethod
     def find_left_station(route: Route, where: int) -> Node:
-        left_where = where-1
-        while not(isinstance(route.visit[left_where], Recharger)) and not(isinstance(route.visit[left_where], Depot)):
-            left_where -= 1
-        left = route.visit[left_where]
+        if where == 0:
+            left = route.visit[0]
+        else:
+            left_where = where-1
+            while not(isinstance(route.visit[left_where], Recharger)) and not(isinstance(route.visit[left_where], Depot)):
+                left_where -= 1
+            left = route.visit[left_where]
         return left
 
     @staticmethod
     def find_right_station(route: Route, where: int) -> Node:
-        right_where = where+1
-        while not(isinstance(route.visit[right_where], Recharger)) and not(isinstance(route.visit[right_where], Depot)):
-            right_where += 1
-        right = route.visit[right_where]
+        if where == len(route.visit)-1:
+            right = route.visit[-1]
+        else:
+            right_where = where+1
+            while not(isinstance(route.visit[right_where], Recharger)) and not(isinstance(route.visit[right_where], Depot)):
+                right_where += 1
+            right = route.visit[right_where]
         return right
 
     @staticmethod
@@ -533,6 +545,8 @@ class Operation:
                 return [], []
             ret_sol = []
             ret_act = []
+            solution = solution.copy()
+            solution.addVehicle()
             which2 = 0
             while which2 < len(solution.routes):
                 if which1 != which2:
@@ -570,7 +584,11 @@ class Operation:
             recharger1_which_where = Operation.find_recharger(solution, node1)
             ret_sol = []
             ret_act = []
+            solution = solution.copy()
+            solution.addVehicle()
             for which1, where1 in recharger1_which_where:
+                if where1 == len(solution.routes[which1].visit)-2:
+                    continue
                 which2 = 0
                 while which2 < len(solution.routes):
                     if which1 != which2:
@@ -587,6 +605,8 @@ class Operation:
                 return [], []
             ret_sol = []
             ret_act = []
+            solution = solution.copy()
+            solution.addVehicle()
             which1 = 0
             while which1 < len(solution.routes):
                 if which1 != which2:
@@ -600,6 +620,8 @@ class Operation:
             recharger2_which_where = Operation.find_recharger(solution, node2)
             ret_sol = []
             ret_act = []
+            solution = solution.copy()
+            solution.addVehicle()
             which1 = 0
             while which1 < len(solution.routes):
                 for which2, where2 in recharger2_which_where:
@@ -632,6 +654,9 @@ class Operation:
             which1, where1 = Operation.find_customer(solution, node1)
             ret_sol = []
             ret_act = []
+            if len(solution.routes[which1].visit) != 3:
+                solution = solution.copy()
+                solution.addVehicle()
             which2 = 0
             while which2 < len(solution.routes):
                 if not (which2 == which1 and where1 == len(solution.routes[which2].visit)-2):

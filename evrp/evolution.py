@@ -11,8 +11,8 @@ class VNS_TS:
 
     vns_neighbour_Rts = 4
     vns_neighbour_max = 5
-    eta_feas = 50
-    eta_dist = 20
+    eta_feas = 100
+    eta_dist = 40
     Delta_SA = 0.08
 
     penalty = [10, 10, 10]
@@ -44,6 +44,7 @@ class VNS_TS:
         self.SA_feas = Util.SA(self.Delta_SA, self.eta_feas)
         self.penalty_update_flag = [collections.deque(maxlen=self.eta_penalty), collections.deque(maxlen=self.eta_penalty), collections.deque(maxlen=self.eta_penalty)]
         self.calculate_possible_arc()
+        print(len(self.possible_arc))
 
     @staticmethod
     def penalty_capacity(route: Route, vehicle: Vehicle) -> float:
@@ -77,6 +78,8 @@ class VNS_TS:
 
     @staticmethod
     def get_objective_route(route: Route, vehicle: Vehicle, penalty: list) -> float:
+        if route.no_customer():
+            return 0
         return route.sum_distance()+penalty[0]*VNS_TS.penalty_capacity(route, vehicle)+penalty[1]*VNS_TS.penalty_time(route, vehicle)+penalty[2]*VNS_TS.penalty_battery(route, vehicle)
 
     @staticmethod
@@ -207,7 +210,7 @@ class VNS_TS:
     def tabu_search(self, S: Solution) -> Solution:
         best_S = S
         #best_val = VNS_TS.get_objective(S, self.model, self.penalty)
-        select_arc = self.select_possible_arc(50)
+        select_arc = self.select_possible_arc(100)
         tabu_list = {}
         for _ in range(self.eta_tabu):
             local_best_S = None
@@ -238,6 +241,7 @@ class VNS_TS:
         s2_val = VNS_TS.get_objective(solution2, self.model, self.penalty)
         if solution1.feasible(self.model) and solution2.feasible(self.model):
             if len(solution1) < len(solution2) or (len(solution1) == len(solution2) and s1_val < s2_val):
+                # if solution1.get_actual_routes() < solution2.get_actual_routes() or (solution1.get_actual_routes() == solution2.get_actual_routes() and s1_val < s2_val):
                 return True
         elif solution1.feasible(self.model) and not solution2.feasible(self.model):
             return True
@@ -287,7 +291,7 @@ class VNS_TS:
             if feasibilityPhase:
                 if not S.feasible(self.model):
                     if i == self.eta_feas:
-                        S.addVehicle(self.model)
+                        S.addVehicle()
                         i = -1
                 else:
                     feasibilityPhase = False
@@ -302,12 +306,12 @@ class DEMA:
     model = None
     penalty = (15, 5, 10)
     maxiter_evo = 100
-    size = 10
+    size = 30
     infeasible_proportion = 0.25
     sigma = (1, 5, 10)
     theta = 0.7
     maxiter_tabu_mul = 4
-    max_neighbour_mul = 5
+    max_neighbour_mul = 3
     tabu_len = 4
     local_search_step = 10
     charge_modify_step = 14
@@ -539,7 +543,7 @@ class DEMA:
 
         return P
 
-    def tabu_search(self, solution: Solution) -> Solution:
+    def tabu_search_vnsts(self, solution: Solution) -> Solution:
         if getattr(self, 'vnsts', None) is None:
             self.vnsts = VNS_TS(self.model)
         sol = self.vnsts.tabu_search(solution)
@@ -625,7 +629,7 @@ class DEMA:
             retP = []
             for i, sol in enumerate(P):
                 print(iter, 'tabu', i)
-                retP.append(self.tabu_search(sol))
+                retP.append(self.tabu_search_vnsts(sol))
             self.last_local_search = 0
             return retP
         elif self.last_charge_modify >= self.charge_modify_step:

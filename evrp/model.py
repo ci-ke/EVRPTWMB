@@ -76,6 +76,8 @@ class Route:
     # 构造属性
     visit = []
     # 计算属性
+    sum_distance = None
+    penalty = []
     arrive_load_weight = None  # 到达并服务后载货量 向量
     arrive_remain_battery = None  # 刚到达时剩余电量 向量
     arrive_time = None  # 刚到达时的时刻 向量
@@ -268,6 +270,8 @@ class Route:
         self.rechargers = None
 
     def random_segment_range(self, max: int) -> tuple:
+        if len(self.visit) == 2:
+            return(1, 1)  # a[1:1]=x 表示a.insert(1,x)
         actual_max = min(len(self.visit)-2, max)
         length = random.randint(0, actual_max)
         start_point = random.randint(1, len(self.visit)-1-length)  # random.choice(range(1, len(self.visit)-length))
@@ -510,7 +514,7 @@ class Solution:
         for route in self.routes:
             route.clear_status()
 
-    def addVehicle(self, model: Model) -> None:
+    def addVehicle(self) -> None:
         # if len(self.routes) < model.max_vehicle:
         self.routes.append(Route([self.routes[0].visit[0], self.routes[0].visit[0]]))
         self.id.append(self.next_id)
@@ -550,13 +554,6 @@ class Solution:
     def get_route_from_id(self, id: int) -> Route:
         index = self.id.index(id)
         return self.routes[index]
-
-    def get_actual_routes(self) -> Route:
-        num = 0
-        for route in self.routes:
-            if not route.no_customer():
-                num += 1
-        return num
 
     def serve_all_customer(self, model: Model) -> bool:
         served_cus_list = []
