@@ -1,4 +1,5 @@
 import collections
+import multiprocessing as mp
 
 from .model import *
 from .util import *
@@ -280,7 +281,7 @@ class VNS_TS:
 
             print(i, S.feasible(self.model), len(S), VNS_TS.get_objective(S, self.model, self.penalty))
 
-            S1 = Operation.cyclic_exchange(S, *self.vns_neighbour[k])
+            S1 = Operation.cyclic_exchange(S, self.model, *self.vns_neighbour[k])
             S2 = self.tabu_search(S1)
             if self.compare_better(S2, S) or (feasibilityPhase and self.acceptSA_feas(S2, S, i)) or (not feasibilityPhase and self.acceptSA_dist(S2, S, i)):
                 S = S2
@@ -489,11 +490,11 @@ class DEMA:
 
             if sel == 0:
                 S_parent = random.choice(P_parent)
-                S = Operation.ACO_GM_cross1(S_parent)
+                S = Operation.ACO_GM_cross1(S_parent, self.model)
                 assert S.serve_all_customer(self.model)
             elif sel == 1:
                 S_parent, S2 = random.sample(P_parent, 2)
-                S = Operation.ACO_GM_cross2(S_parent, S2)
+                S = Operation.ACO_GM_cross2(S_parent, S2, self.model)
                 assert S.serve_all_customer(self.model)
 
             cross_call_times[sel] += 1
@@ -538,8 +539,8 @@ class DEMA:
                 P.append(sol)
         assert len(P) == self.size
 
-        for sol in P:
-            sol.clear_status()
+        # for sol in P:
+        #    sol.clear_status()
 
         return P
 

@@ -7,7 +7,7 @@ from .util import *
 
 class Operation:
     @staticmethod
-    def cyclic_exchange(solution: Solution, Rts: int, max: int) -> Solution:
+    def cyclic_exchange(solution: Solution, model: Model, Rts: int, max: int) -> Solution:
         if len(solution.routes) <= Rts:
             sel = list(range(len(solution.routes)))
         else:
@@ -16,29 +16,35 @@ class Operation:
         for route_i in sel:
             actual_select[route_i] = solution.routes[route_i].random_segment_range(max)
 
-        ret_sol = solution.copy()
+        ret_sol = solution.copy_clear()
         for sel_i in range(len(sel)):
             ret_sol.routes[sel[sel_i]].visit[actual_select[sel[sel_i]][0]:actual_select[sel[sel_i]][1]] = solution.routes[sel[(sel_i+1) % len(sel)]].visit[actual_select[sel[(sel_i+1) % len(sel)]][0]:actual_select[sel[(sel_i+1) % len(sel)]][1]]
 
         # ret_sol.remove_empty_route()
 
         for route in ret_sol.routes:
-            route.remove_depot_to_recharger0()
-            route.remove_successive_recharger()
+            route.remove_depot_to_recharger0(model.vehicle)
+            route.remove_successive_recharger(model.vehicle)
 
         return ret_sol
 
     @staticmethod
-    def two_opt_star_action(solution: Solution, first_which: int, first_where: int, second_which: int, second_where: int) -> Solution:
+    def two_opt_star_action(solution: Solution, model: Model, first_which: int, first_where: int, second_which: int, second_where: int) -> Solution:
         assert first_which != second_which
         ret_sol = solution.copy()
         ret_sol.routes[first_which].visit[first_where+1:] = solution.routes[second_which].visit[second_where+1:]
         ret_sol.routes[second_which].visit[second_where+1:] = solution.routes[first_which].visit[first_where+1:]
 
-        ret_sol.routes[first_which].remove_depot_to_recharger0()
-        ret_sol.routes[first_which].remove_successive_recharger()
-        ret_sol.routes[second_which].remove_depot_to_recharger0()
-        ret_sol.routes[second_which].remove_successive_recharger()
+        ret_sol.routes[first_which].clear_status()
+        ret_sol.routes[second_which].clear_status()
+        
+        ret_sol.routes[first_which].feasible(model.vehicle)
+        ret_sol.routes[second_which].feasible(model.vehicle)
+
+        ret_sol.routes[first_which].remove_depot_to_recharger0(model.vehicle)
+        ret_sol.routes[first_which].remove_successive_recharger(model.vehicle)
+        ret_sol.routes[second_which].remove_depot_to_recharger0(model.vehicle)
+        ret_sol.routes[second_which].remove_successive_recharger(model.vehicle)
 
         # if ret_sol.routes[first_which].no_customer():
         #    ret_sol.remove_route_index(first_which)
@@ -70,24 +76,29 @@ class Operation:
         return which, where, new_which, new_where
 
     @staticmethod
-    def relocate_action(solution: Solution, which: int, where: int, new_which: int, new_where: int) -> Solution:
+    def relocate_action(solution: Solution, model: Model, which: int, where: int, new_which: int, new_where: int) -> Solution:
         ret_sol = solution.copy()
         if new_which != which:
-            ret_sol[new_which].visit.insert(new_where, solution.routes[which].visit[where])
-            del ret_sol.routes[which].visit[where]
+            #ret_sol[new_which].visit.insert(new_where, solution.routes[which].visit[where])
+            ret_sol[new_which].add_node(model.vehicle, new_where, solution.routes[which].visit[where])
+            #del ret_sol.routes[which].visit[where]
+            ret_sol.routes[which].del_node(model.vehicle, where)
             # if ret_sol.routes[which].no_customer():
             #    ret_sol.remove_route_index(which)
         else:
-            ret_sol[which].visit.insert(new_where, solution.routes[which].visit[where])
+            #ret_sol[which].add_node(new_where, solution.routes[which].visit[where])
+            ret_sol[new_which].add_node(model.vehicle, new_where, solution.routes[which].visit[where])
             if new_where > where:
-                del ret_sol.routes[which].visit[where]
+                #del ret_sol.routes[which].visit[where]
+                ret_sol.routes[which].del_node(model.vehicle, where)
             else:
-                del ret_sol.routes[which].visit[where+1]
+                #del ret_sol.routes[which].visit[where+1]
+                ret_sol.routes[which].del_node(model.vehicle, where+1)
 
         ret_sol.remove_empty_route()
         for route in ret_sol.routes:
-            route.remove_depot_to_recharger0()
-            route.remove_successive_recharger()
+            route.remove_depot_to_recharger0(model.vehicle)
+            route.remove_successive_recharger(model.vehicle)
 
         return ret_sol
 
@@ -115,15 +126,19 @@ class Operation:
                 return which1, where1, which2, where2
 
     @staticmethod
-    def exchange_action(solution: Solution, which1: int, where1: int, which2: int, where2: int) -> Solution:
+    def exchange_action(solution: Solution, model: Model, which1: int, where1: int, which2: int, where2: int) -> Solution:
         ret_sol = solution.copy()
-        ret_sol.routes[which1].visit[where1] = solution.routes[which2].visit[where2]
-        ret_sol.routes[which2].visit[where2] = solution.routes[which1].visit[where1]
+        #ret_sol.routes[which1].visit[where1] = solution.routes[which2].visit[where2]
+        ret_sol.routes[which1].del_node(model.vehicle, where1)
+        ret_sol.routes[which1].add_node(model.vehicle, where1, solution.routes[which2].visit[where2])
+        #ret_sol.routes[which2].visit[where2] = solution.routes[which1].visit[where1]
+        ret_sol.routes[which2].del_node(model.vehicle, where2)
+        ret_sol.routes[which2].add_node(model.vehicle, where2, solution.routes[which1].visit[where1])
 
         ret_sol.remove_empty_route()
         for route in ret_sol:
-            route.remove_depot_to_recharger0()
-            route.remove_successive_recharger()
+            route.remove_depot_to_recharger0(model.vehicle)
+            route.remove_successive_recharger(model.vehicle)
 
         return ret_sol
 
@@ -141,12 +156,14 @@ class Operation:
         return recharger, which, where
 
     @staticmethod
-    def stationInRe_action(solution: Solution, recharger: Recharger, which: int, where: int) -> Solution:
+    def stationInRe_action(solution: Solution, model: Model, recharger: Recharger, which: int, where: int) -> Solution:
         ret_sol = solution.copy()
         if ret_sol.routes[which].visit[where-1] is recharger:
-            del ret_sol.routes[which].visit[where-1]
+            #del ret_sol.routes[which].visit[where-1]
+            ret_sol.routes[which].del_node(model.vehicle, where-1)
         else:
-            ret_sol.routes[which].visit.insert(where, recharger)
+            #ret_sol.routes[which].visit.insert(where, recharger)
+            ret_sol.routes[which].add_node(model.vehicle, where, recharger)
         # ret_sol.routes[which].remove_depot_to_recharger0()
         ret_sol.remove_empty_route()
         return ret_sol
@@ -162,9 +179,10 @@ class Operation:
         return which, where1, where2
 
     @staticmethod
-    def two_opt_action(solution: Solution, which: int, where1: int, where2: int) -> Solution:
+    def two_opt_action(solution: Solution, model: Model, which: int, where1: int, where2: int) -> Solution:
         ret_sol = solution.copy()
         ret_sol.routes[which].visit[where1:where2+1] = reversed(solution.routes[which].visit[where1:where2+1])
+        ret_sol.routes[which].clear_status()
 
         for route in ret_sol.routes:
             if isinstance(route.visit[1], Recharger) and route.visit[1].x == route.visit[0].x and route.visit[1].y == route.visit[0].y:
@@ -172,7 +190,7 @@ class Operation:
             if isinstance(route.visit[-2], Recharger) and route.visit[-2].x == route.visit[0].x and route.visit[-2].y == route.visit[0].y:
                 del route.visit[-2]
 
-        ret_sol.routes[which].remove_successive_recharger()
+        ret_sol.routes[which].remove_successive_recharger(model.vehicle)
 
         return ret_sol
 
@@ -196,7 +214,7 @@ class Operation:
         return to_route, insert_place_to_route
 
     @staticmethod
-    def ACO_GM_cross1(solution: Solution) -> Solution:
+    def ACO_GM_cross1(solution: Solution, model: Model) -> Solution:
         solution = solution.copy()
         if len(solution.routes) > 1:
             avg_dis = np.zeros(len(solution.routes), dtype=float)
@@ -211,13 +229,14 @@ class Operation:
             for node in visit_list:
                 if isinstance(node, Customer):
                     to_route, insert_place_to_route = Operation.choose_best_insert(solution, node, rest_routes_index)
-                    solution.routes[to_route].visit.insert(insert_place_to_route, node)
+                    #solution.routes[to_route].visit.insert(insert_place_to_route, node)
+                    solution.routes[to_route].add_node(model.vehicle, insert_place_to_route, node)
             solution.remove_route_index(select)
-        solution.clear_status()
+        # solution.clear_status()
         return solution
 
     @staticmethod
-    def ACO_GM_cross2(solution1: Solution, solution2: Solution) -> Solution:
+    def ACO_GM_cross2(solution1: Solution, solution2: Solution, model: Model) -> Solution:
         solution1 = solution1.copy()
         avg_dis_reciprocal = np.zeros(len(solution2.routes), dtype=float)
         for i, route in enumerate(solution2.routes):
@@ -234,21 +253,23 @@ class Operation:
             i = 1
             while i < len(route.visit)-1:
                 if route.visit[i] in visit_cus_list:
-                    del route.visit[i]
+                    #del route.visit[i]
+                    route.del_node(model.vehicle, i)
                 else:
                     i += 1
 
         random.shuffle(visit_cus_list)
         for node in visit_cus_list:
             to_route, insert_place_to_route = Operation.choose_best_insert(solution1, node, list(range(len(solution1.routes))))
-            solution1.routes[to_route].visit.insert(insert_place_to_route, node)
+            #solution1.routes[to_route].visit.insert(insert_place_to_route, node)
+            solution1.routes[to_route].add_node(model.vehicle, insert_place_to_route, node)
         solution1.remove_empty_route()
-        solution1.clear_status()
+        # solution1.clear_status()
         return solution1
 
     @staticmethod
     def charging_modification(solution: Solution, model: Model) -> Solution:
-        solution = solution.copy()
+        solution = solution.copy_clear()
         ready_to_remove = []
         for route in solution.routes:
             if route.feasible_capacity(model.vehicle)[0] and route.feasible_time(model.vehicle)[0] and not route.feasible_battery(model.vehicle)[0]:
@@ -525,7 +546,7 @@ class Operation:
             if which1 == which2:
                 return [], []
             else:
-                sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
+                sol = Operation.two_opt_star_action(solution, model, which1, where1, which2, where2-1)
                 act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
                 return [sol], [act]
         elif isinstance(node1, Customer) and isinstance(node2, Recharger):
@@ -534,7 +555,7 @@ class Operation:
             ret_act = []
             for which2, where2 in recharger2_which_where:
                 if which1 != which2:
-                    sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
+                    sol = Operation.two_opt_star_action(solution, model, which1, where1, which2, where2-1)
                     ret_sol.append(sol)
                     act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
                     ret_act.append(act)
@@ -551,7 +572,7 @@ class Operation:
             while which2 < len(solution.routes):
                 if which1 != which2:
                     where2 = len(solution.routes[which2])-1
-                    sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
+                    sol = Operation.two_opt_star_action(solution, model, which1, where1, which2, where2-1)
                     ret_sol.append(sol)
                     act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
                     ret_act.append(act)
@@ -563,7 +584,7 @@ class Operation:
             ret_act = []
             for which1, where1 in recharger1_which_where:
                 if which1 != which2:
-                    sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
+                    sol = Operation.two_opt_star_action(solution, model, which1, where1, which2, where2-1)
                     ret_sol.append(sol)
                     act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
                     ret_act.append(act)
@@ -575,7 +596,7 @@ class Operation:
             for which1, where1 in recharger1_which_where:
                 for which2, where2 in recharger2_which_where:
                     if which1 != which2:
-                        sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
+                        sol = Operation.two_opt_star_action(solution, model, which1, where1, which2, where2-1)
                         ret_sol.append(sol)
                         act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
                         ret_act.append(act)
@@ -593,7 +614,7 @@ class Operation:
                 while which2 < len(solution.routes):
                     if which1 != which2:
                         where2 = len(solution.routes[which2])-1
-                        sol = Operation.two_opt_star_action(solution, which1, where1, which2, where2-1)
+                        sol = Operation.two_opt_star_action(solution, model, which1, where1, which2, where2-1)
                         ret_sol.append(sol)
                         act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
                         ret_act.append(act)
@@ -610,7 +631,7 @@ class Operation:
             which1 = 0
             while which1 < len(solution.routes):
                 if which1 != which2:
-                    sol = Operation.two_opt_star_action(solution, which1, 0, which2, where2-1)
+                    sol = Operation.two_opt_star_action(solution, model, which1, 0, which2, where2-1)
                     ret_sol.append(sol)
                     act = ((node1, node2), solution.id[which1], node1, Operation.find_right_station(solution.routes[which1], 0))
                     ret_act.append(act)
@@ -628,7 +649,7 @@ class Operation:
                     if where2 == 1:
                         continue
                     if which1 != which2:
-                        sol = Operation.two_opt_star_action(solution, which1, 0, which2, where2-1)
+                        sol = Operation.two_opt_star_action(solution, model, which1, 0, which2, where2-1)
                         ret_sol.append(sol)
                         act = ((node1, node2), solution.id[which1], node1, Operation.find_right_station(solution.routes[which1], 1))
                         ret_act.append(act)
@@ -647,7 +668,7 @@ class Operation:
             which1, where1, which2, where2 = Operation.find_two_customer(solution, node1, node2)
             if which1 == which2 and where2 == where1+1:
                 return [], []
-            sol = Operation.relocate_action(solution, which1, where1, which2, where2)
+            sol = Operation.relocate_action(solution, model, which1, where1, which2, where2)
             act = ((node1, node2), solution.id[which2], *Operation.find_left_right_station(solution.routes[which2], where2))
             return [sol], [act]
         elif isinstance(node1, Customer) and isinstance(node2, Depot):
@@ -661,7 +682,7 @@ class Operation:
             while which2 < len(solution.routes):
                 if not (which2 == which1 and where1 == len(solution.routes[which2].visit)-2):
                     where2 = len(solution.routes[which2].visit)-1
-                    sol = Operation.relocate_action(solution, which1, where1, which2, where2)
+                    sol = Operation.relocate_action(solution, model, which1, where1, which2, where2)
                     act = ((node1, node2), solution.id[which2], Operation.find_left_station(solution.routes[which2], where2), node2)
                     ret_sol.append(sol)
                     ret_act.append(act)
@@ -673,7 +694,7 @@ class Operation:
             ret_act = []
             for which2, where2 in recharger2_which_where:
                 if not (which1 == which2 and where2 == where1+1):
-                    sol = Operation.relocate_action(solution, which1, where1, which2, where2)
+                    sol = Operation.relocate_action(solution, model, which1, where1, which2, where2)
                     ret_sol.append(sol)
                     act = ((node1, node2), solution.id[which2], *Operation.find_left_right_station(solution.routes[which2], where2))
                     ret_act.append(act)
@@ -684,7 +705,7 @@ class Operation:
             ret_act = []
             for which1, where1 in recharger1_which_where:
                 if not (which1 == which2 and where2 == where1+1):
-                    sol = Operation.relocate_action(solution, which1, where1, which2, where2)
+                    sol = Operation.relocate_action(solution, model, which1, where1, which2, where2)
                     ret_sol.append(sol)
                     act = ((node1, node2), solution.id[which2], *Operation.find_left_right_station(solution.routes[which2], where2))
                     ret_act.append(act)
@@ -700,7 +721,7 @@ class Operation:
                 while which2 < len(solution.routes):
                     if not (which2 == which1 and where1 == len(solution.routes[which2].visit)-2):
                         where2 = len(solution.routes[which2].visit)-1
-                        sol = Operation.relocate_action(solution, which1, where1, which2, where2)
+                        sol = Operation.relocate_action(solution, model, which1, where1, which2, where2)
                         ret_sol.append(sol)
                         act = ((node1, node2), solution.id[which2], Operation.find_left_station(solution.routes[which2], where2), node2)
                         ret_act.append(act)
@@ -713,7 +734,7 @@ class Operation:
             for which1, where1 in recharger1_which_where:
                 for which2, where2 in recharger2_which_where:
                     if not (which1 == which2 and where1+1 == where2):
-                        sol = Operation.relocate_action(solution, which1, where1, which2, where2)
+                        sol = Operation.relocate_action(solution, model, which1, where1, which2, where2)
                         ret_sol.append(sol)
                         act = ((node1, node2), solution.id[which2], *Operation.find_left_right_station(solution.routes[which2], where2))
                         ret_act.append(act)
@@ -731,7 +752,7 @@ class Operation:
                 if (not isinstance(solution.routes[which1].visit[where1+1], Customer)) or where1 == len(solution.routes[which1])-2 or (which1 == which2 and where2 == where1+1):
                     return [], []
                 else:
-                    sol = Operation.exchange_action(solution, which1, where1+1, which2, where2)
+                    sol = Operation.exchange_action(solution, model, which1, where1+1, which2, where2)
                     act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
                     return [sol], [act]
             elif isinstance(node1, Depot):
@@ -741,7 +762,7 @@ class Operation:
                 which1 = 0
                 while which1 < len(solution.routes):
                     if isinstance(solution.routes[which1].visit[1], Customer) and not (where2 == 1 and which1 == which2):
-                        sol = Operation.exchange_action(solution, which1, 1, which2, where2)
+                        sol = Operation.exchange_action(solution, model, which1, 1, which2, where2)
                         ret_sol.append(sol)
                         act = ((node1, node2), solution.id[which1], node1, Operation.find_right_station(solution.routes[which1], 0))
                         ret_act.append(act)
@@ -753,7 +774,7 @@ class Operation:
                 ret_act = []
                 for which1, where1 in recharger1_which_where:
                     if isinstance(solution.routes[which1].visit[where1+1], Customer) and where1 != len(solution.routes[which1])-2 and not (which1 == which2 and where2 == where1+1):
-                        sol = Operation.exchange_action(solution, which1, where1+1, which2, where2)
+                        sol = Operation.exchange_action(solution, model, which1, where1+1, which2, where2)
                         ret_sol.append(sol)
                         act = ((node1, node2), solution.id[which1], *Operation.find_left_right_station(solution.routes[which1], where1))
                         ret_act.append(act)
@@ -774,7 +795,7 @@ class Operation:
                 depot = solution.routes[0].visit[0]
                 if node1.x == depot.x and node1.y == depot.y:
                     return [], []
-            sol = Operation.stationInRe_action(solution, node1, which2, where2)
+            sol = Operation.stationInRe_action(solution, model, node1, which2, where2)
             act = ((node1, node2), solution.id[which2], *Operation.find_left_right_station(solution.routes[which2], where2))
             return [sol], [act]
         elif isinstance(node2, Depot):
@@ -785,7 +806,7 @@ class Operation:
             cur_which = 0
             while cur_which < len(solution.routes):
                 cur_where = len(solution.routes[cur_which].visit)-1
-                sol = Operation.stationInRe_action(solution, node1, cur_which, cur_where)
+                sol = Operation.stationInRe_action(solution, model, node1, cur_which, cur_where)
                 ret_sol.append(sol)
                 act = ((node1, node2), solution.id[cur_which], Operation.find_left_station(solution.routes[cur_which], cur_where), node2)
                 ret_act.append(act)
@@ -800,7 +821,7 @@ class Operation:
                     depot = solution.routes[0].visit[0]
                     if node1.x == depot.x and node1.y == depot.y:
                         continue
-                sol = Operation.stationInRe_action(solution, node1, which2, where2)
+                sol = Operation.stationInRe_action(solution, model, node1, which2, where2)
                 ret_sol.append(sol)
                 act = ((node1, node2), solution.id[which2], *Operation.find_left_right_station(solution.routes[which2], where2))
                 ret_act.append(act)

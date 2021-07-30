@@ -120,6 +120,10 @@ class Route:
             ret.rechargers = self.rechargers.copy()
         return ret
 
+    def copy_clear(self) -> object:
+        ret = Route(self.visit[:])
+        return ret
+
     def sum_distance(self) -> float:
         if self.adjacent_distance is None:
             self.cal_adjacent_distance()
@@ -209,6 +213,7 @@ class Route:
         ready_time = np.array([node.ready_time for node in self.visit[index:]])
         service_time = np.array([node.service_time for node in self.visit[index:]])
         for i in np.extract(self.rechargers >= index, self.rechargers):
+            i = int(i)
             service_time[i-index] += (vehicle.max_battery-self.arrive_remain_battery[i])*vehicle.charge_speed
         arrive_service_time = np.cumsum(service_time)
         arrive_before_service_time = np.zeros(len(self.visit)-index)
@@ -333,24 +338,28 @@ class Route:
                     return False
             return True
 
-    def remove_successive_recharger(self) -> None:
+    def remove_successive_recharger(self, vehicle: Vehicle) -> None:
         i = 1
         while i < len(self.visit)-1:
             if isinstance(self.visit[i], Recharger) and isinstance(self.visit[i-1], Recharger) and self.visit[i].id == self.visit[i-1].id:
-                del self.visit[i]
+                #del self.visit[i]
+                self.del_node(vehicle, i)
             i += 1
 
-    def remove_depot_to_recharger0(self) -> None:
+    def remove_depot_to_recharger0(self, vehicle: Vehicle) -> None:
         while isinstance(self.visit[1], Recharger) and self.visit[1].x == self.visit[0].x and self.visit[1].y == self.visit[0].y:
-            del self.visit[1]
+            #del self.visit[1]
+            self.del_node(vehicle, 1)
         while isinstance(self.visit[-2], Recharger) and self.visit[-2].x == self.visit[0].x and self.visit[-2].y == self.visit[0].y:
-            del self.visit[-2]
+            #del self.visit[-2]
+            self.del_node(vehicle, len(self.visit)-2)
 
     def add_node(self, vehicle: Vehicle, i: int, node: Node) -> None:
         '''
         在i之前插入点
         '''
         assert 1 <= i and i <= len(self.visit)-1
+        i = int(i)
         # 插入访问节点
         self.visit.insert(i, node)
         # 更新两点距离
@@ -381,7 +390,7 @@ class Route:
             if len(next_station) == 0:
                 self.arrive_remain_battery[i:] += difference
             else:
-                self.arrive_remain_battery[i:next_station[0]+1] += difference
+                self.arrive_remain_battery[i:int(next_station[0])+1] += difference
             self.arrive_remain_battery = np.insert(self.arrive_remain_battery, i, new_node_arrive_battery)
 
             # 更新电站位置
@@ -405,7 +414,7 @@ class Route:
             if len(next_station) == 0:
                 self.arrive_remain_battery[i:] += difference
             else:
-                self.arrive_remain_battery[i:next_station[0]+1] += difference
+                self.arrive_remain_battery[i:int(next_station[0])+1] += difference
             self.arrive_remain_battery = np.insert(self.arrive_remain_battery, i, new_node_arrive_battery)
 
             # 更新电站位置
@@ -435,13 +444,14 @@ class Route:
 
         # 更新之后的到达时间
         self.cal_arrive_time_after_index(vehicle, i)
+        # self.cal_arrive_time(vehicle)
 
     def del_node(self, vehicle: Vehicle, i: int) -> None:
         '''
         删除i
         '''
         assert 1 <= i and i <= len(self.visit)-1
-
+        i = int(i)
         # 删除相邻距离
         self.adjacent_distance = np.delete(self.adjacent_distance, i)
         self.adjacent_distance[i-1] = self.visit[i-1].distance_to(self.visit[i+1])
@@ -457,6 +467,7 @@ class Route:
         elif isinstance(self.visit[i], Recharger):
             # 更新载重
             self.arrive_load_weight = np.delete(self.arrive_load_weight, i)
+            # 更新电站位置
             self.rechargers = np.delete(self.rechargers, np.where(self.rechargers == i))
 
         else:
@@ -473,14 +484,18 @@ class Route:
         if len(next_station) == 0:
             self.arrive_remain_battery[i:] += difference
         else:
-            self.arrive_remain_battery[i:next_station[0]+1] += difference
+            self.arrive_remain_battery[i:int(next_station[0])+1] += difference
+
+        # 更新电站位置
+        self.rechargers[np.where(self.rechargers > i)] -= 1
 
         # 删除访问节点
         del self.visit[i]
 
         # 更新之后的到达时间
-        self.arrive_time=np.delete(self.arrive_time,i)
+        self.arrive_time = np.delete(self.arrive_time, i)
         self.cal_arrive_time_after_index(vehicle, i-1)
+        # self.cal_arrive_time(vehicle)
 
 
 class Model:
@@ -649,6 +664,12 @@ class Solution:
 
     def copy(self) -> object:
         ret = Solution([route.copy() for route in self.routes])
+        ret.id = self.id[:]
+        ret.next_id = self.next_id
+        return ret
+
+    def copy_clear(self) -> object:
+        ret = Solution([route.copy_clear() for route in self.routes])
         ret.id = self.id[:]
         ret.next_id = self.next_id
         return ret
