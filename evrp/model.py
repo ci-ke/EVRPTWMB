@@ -30,10 +30,10 @@ class Node(metaclass=ABCMeta):
 class Depot(Node):
     def __init__(self, id: int, x: float, y: float, over_time: float) -> None:
         super().__init__(id, x, y)
-        self.demand = 0
-        self.ready_time = 0
+        self.demand = 0.0
+        self.ready_time = 0.0
         self.over_time = over_time
-        self.service_time = 0
+        self.service_time = 0.0
 
 
 class Customer(Node):
@@ -49,10 +49,10 @@ class Customer(Node):
 class Recharger(Node):
     def __init__(self, id: int, x: float, y: float, over_time: float) -> None:
         super().__init__(id, x, y)
-        self.demand = 0
-        self.ready_time = 0
+        self.demand = 0.0
+        self.ready_time = 0.0
         self.over_time = over_time
-        self.service_time = 0
+        self.service_time = 0.0
 
 
 class Vehicle:
@@ -76,8 +76,6 @@ class Route:
     # 构造属性
     visit = []
     # 计算属性
-    sum_distance = None
-    penalty = []
     arrive_load_weight = None  # 到达并服务后载货量 向量
     arrive_remain_battery = None  # 刚到达时剩余电量 向量
     arrive_time = None  # 刚到达时的时刻 向量
@@ -109,7 +107,18 @@ class Route:
         return self.visit == other.visit
 
     def copy(self) -> object:
-        return Route(self.visit[:])
+        ret = Route(self.visit[:])
+        if self.arrive_load_weight is not None:
+            ret.arrive_load_weight = self.arrive_load_weight.copy()
+        if self.arrive_remain_battery is not None:
+            ret.arrive_remain_battery = self.arrive_remain_battery.copy()
+        if self.arrive_time is not None:
+            ret.arrive_time = self.arrive_time.copy()
+        if self.adjacent_distance is not None:
+            ret.adjacent_distance = self.adjacent_distance.copy()
+        if self.rechargers is not None:
+            ret.rechargers = self.rechargers.copy()
+        return ret
 
     def sum_distance(self) -> float:
         if self.adjacent_distance is None:
@@ -192,6 +201,36 @@ class Route:
         #    i = np.where(arrive_time < ready_time)[0][0]
         #    arrive_time[i:] += ready_time[i]-arrive_time[i]
         self.arrive_time = arrive_time
+
+    def cal_arrive_time_after_index(self, vehicle: Vehicle, index: int) -> None:
+        '''
+        需要保证index点到达时间正确
+        '''
+        ready_time = np.array([node.ready_time for node in self.visit[index:]])
+        service_time = np.array([node.service_time for node in self.visit[index:]])
+        for i in np.extract(self.rechargers >= index, self.rechargers):
+            service_time[i-index] += (vehicle.max_battery-self.arrive_remain_battery[i])*vehicle.charge_speed
+        arrive_service_time = np.cumsum(service_time)
+        arrive_before_service_time = np.zeros(len(self.visit)-index)
+        arrive_before_service_time[:] = self.arrive_time[index]
+        arrive_before_service_time[1:] += arrive_service_time[:-1]
+        adjacent_consume_time = np.zeros(len(self.visit)-index)
+        adjacent_consume_time[1:] = self.adjacent_distance[index:]/vehicle.velocity
+        arrive_consume_time = np.cumsum(adjacent_consume_time)
+        arrive_time = arrive_consume_time + arrive_before_service_time
+
+        done = 0
+        while True:
+            need_process = np.where(arrive_time < ready_time)[0]
+            if len(need_process) == done:
+                break
+            i = need_process[done]
+            arrive_time[i+1:] += ready_time[i]-arrive_time[i]
+            done += 1
+        # while True in (arrive_time < ready_time):
+        #    i = np.where(arrive_time < ready_time)[0][0]
+        #    arrive_time[i:] += ready_time[i]-arrive_time[i]
+        self.arrive_time[index:] = arrive_time
 
     def feasible_capacity(self, vehicle: Vehicle) -> tuple:
         if self.arrive_load_weight is None:
@@ -306,6 +345,100 @@ class Route:
             del self.visit[1]
         while isinstance(self.visit[-2], Recharger) and self.visit[-2].x == self.visit[0].x and self.visit[-2].y == self.visit[0].y:
             del self.visit[-2]
+
+    def add_node(self, vehicle: Vehicle, i: int, node: Node) -> None:
+        '''
+        在i之前插入点
+        '''
+        assert 1 <= i and i <= len(self.visit)-1
+        # 插入访问节点
+        self.visit.insert(i, node)
+        # 更新两点距离
+        self.adjacent_distance[i-1] = node.distance_to(self.visit[i-1])
+        new_distance = node.distance_to(self.visit[i+1])
+        self.adjacent_distance = np.insert(self.adjacent_distance, i, new_distance)
+
+        if isinstance(node, Customer):
+            # 更新载重
+            if node.demand >= 0:
+                new_node_load_weight = self.arrive_load_weight[i-1]
+                self.arrive_load_weight[:i] += node.demand
+                self.arrive_load_weight = np.insert(self.arrive_load_weight, i, new_node_load_weight)
+            else:
+                new_node_load_weight = self.arrive_load_weight[i-1]-node.demand
+                self.arrive_load_weight[i] -= node.demand
+                self.arrive_load_weight = np.insert(self.arrive_load_weight, i, new_node_load_weight)
+
+            # 更新电量
+            first_cost_battery = vehicle.battery_cost_speed*self.adjacent_distance[i-1]
+            second_cost_battery = vehicle.battery_cost_speed*self.adjacent_distance[i]
+            if isinstance(self.visit[i-1], Recharger):
+                new_node_arrive_battery = vehicle.max_battery-first_cost_battery
+            else:
+                new_node_arrive_battery = self.arrive_remain_battery[i-1]-first_cost_battery
+            new_node_next_arrive_battery = new_node_arrive_battery-second_cost_battery
+            difference = new_node_next_arrive_battery-self.arrive_remain_battery[i]
+            next_station = np.extract(self.rechargers >= i, self.rechargers)
+            if len(next_station) == 0:
+                self.arrive_remain_battery[i:] += difference
+            else:
+                self.arrive_remain_battery[i:next_station[0]+1] += difference
+            self.arrive_remain_battery = np.insert(self.arrive_remain_battery, i, new_node_arrive_battery)
+
+            # 更新电站位置
+            self.rechargers[np.where(self.rechargers >= i)] += 1
+
+        elif isinstance(node, Recharger):
+            # 更新载重
+            new_node_load_weight = self.arrive_load_weight[i-1]
+            self.arrive_load_weight = np.insert(self.arrive_load_weight, i, new_node_load_weight)
+
+            # 更新电量
+            first_cost_battery = vehicle.battery_cost_speed*self.adjacent_distance[i-1]
+            second_cost_battery = vehicle.battery_cost_speed*self.adjacent_distance[i]
+            if isinstance(self.visit[i-1], Recharger):
+                new_node_arrive_battery = vehicle.max_battery-first_cost_battery
+            else:
+                new_node_arrive_battery = self.arrive_remain_battery[i-1]-first_cost_battery
+            new_node_next_arrive_battery = vehicle.max_battery-second_cost_battery
+            difference = new_node_next_arrive_battery-self.arrive_remain_battery[i]
+            next_station = np.extract(self.rechargers >= i, self.rechargers)
+            if len(next_station) == 0:
+                self.arrive_remain_battery[i:] += difference
+            else:
+                self.arrive_remain_battery[i:next_station[0]+1] += difference
+            self.arrive_remain_battery = np.insert(self.arrive_remain_battery, i, new_node_arrive_battery)
+
+            # 更新电站位置
+            self.rechargers[np.where(self.rechargers >= i)] += 1
+            insert_places = np.where(self.rechargers < i)[0]
+            if len(insert_places) != 0:
+                insert_place = insert_places[-1]+1
+            else:
+                insert_place = 0
+            self.rechargers = np.insert(self.rechargers, insert_place, i)
+
+        else:
+            raise Exception('impossible')
+
+        # 插入正确到达时间
+        travel_time = self.adjacent_distance[i-1]/vehicle.velocity
+        if isinstance(self.visit[i-1], Recharger):
+            travel_time_with_service = travel_time + vehicle.charge_speed*(vehicle.max_battery-self.arrive_remain_battery[i-1])
+            new_node_arrive_time = self.arrive_time[i-1]+travel_time_with_service
+        else:
+            travel_time_with_service = travel_time + self.visit[i-1].service_time
+            if self.arrive_time[i-1] >= self.visit[i-1].ready_time:
+                new_node_arrive_time = self.arrive_time[i-1]+travel_time_with_service
+            else:
+                new_node_arrive_time = self.visit[i-1].ready_time+travel_time_with_service
+        self.arrive_time = np.insert(self.arrive_time, i, new_node_arrive_time)
+
+        # 更新之后的到达时间
+        self.cal_arrive_time_after_index(vehicle, i)
+
+    def remove_node(self, i: int) -> None:
+        pass
 
 
 class Model:
@@ -426,6 +559,15 @@ class Model:
                 return recharger
         raise Exception('no this recharger')
 
+    def create_empty_route(self) -> Route:
+        ret = Route([self.depot, self.depot])
+        ret.arrive_load_weight = np.array([0.0, 0.0])  # 到达并服务后载货量 向量
+        ret.arrive_remain_battery = np.array([self.vehicle.max_battery, self.vehicle.max_battery])  # 刚到达时剩余电量 向量
+        ret.arrive_time = np.array([0.0, 0.0])  # 刚到达时的时刻 向量
+        ret.adjacent_distance = np.array([0.0])  # 两点距离 向量
+        ret.rechargers = np.array([])  # 充电桩索引 向量
+        return ret
+
 
 class Solution:
     # 构造属性
@@ -476,8 +618,8 @@ class Solution:
         return sum(map(lambda route: route.sum_distance(), self.routes))
 
     def feasible(self, model: Model) -> bool:
-        if len(self.routes) > model.max_vehicle:
-            return False
+        # if len(self.routes) > model.max_vehicle:
+        #    return False
         for route in self.routes:
             if not route.feasible(model.vehicle)[0]:
                 return False
@@ -514,9 +656,8 @@ class Solution:
         for route in self.routes:
             route.clear_status()
 
-    def addVehicle(self) -> None:
-        # if len(self.routes) < model.max_vehicle:
-        self.routes.append(Route([self.routes[0].visit[0], self.routes[0].visit[0]]))
+    def add_empty_route(self, model: Model) -> None:
+        self.routes.append(model.create_empty_route())
         self.id.append(self.next_id)
         self.next_id += 1
 

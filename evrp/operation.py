@@ -20,7 +20,7 @@ class Operation:
         for sel_i in range(len(sel)):
             ret_sol.routes[sel[sel_i]].visit[actual_select[sel[sel_i]][0]:actual_select[sel[sel_i]][1]] = solution.routes[sel[(sel_i+1) % len(sel)]].visit[actual_select[sel[(sel_i+1) % len(sel)]][0]:actual_select[sel[(sel_i+1) % len(sel)]][1]]
 
-        ret_sol.remove_empty_route()
+        # ret_sol.remove_empty_route()
 
         for route in ret_sol.routes:
             route.remove_depot_to_recharger0()
@@ -515,7 +515,7 @@ class Operation:
         return which1, where1, recharger2_which_where
 
     @staticmethod
-    def two_opt_star_arc(solution: Solution, node1: Node, node2: Node) -> tuple:
+    def two_opt_star_arc(model: Model, solution: Solution, node1: Node, node2: Node) -> tuple:
         '''
         a后的边，与b前的边，去掉，交换后半部分再连起来，路间
         '''
@@ -546,7 +546,7 @@ class Operation:
             ret_sol = []
             ret_act = []
             solution = solution.copy()
-            solution.addVehicle()
+            solution.add_empty_route(model)
             which2 = 0
             while which2 < len(solution.routes):
                 if which1 != which2:
@@ -585,7 +585,7 @@ class Operation:
             ret_sol = []
             ret_act = []
             solution = solution.copy()
-            solution.addVehicle()
+            solution.add_empty_route(model)
             for which1, where1 in recharger1_which_where:
                 if where1 == len(solution.routes[which1].visit)-2:
                     continue
@@ -606,7 +606,7 @@ class Operation:
             ret_sol = []
             ret_act = []
             solution = solution.copy()
-            solution.addVehicle()
+            solution.add_empty_route(model)
             which1 = 0
             while which1 < len(solution.routes):
                 if which1 != which2:
@@ -621,7 +621,7 @@ class Operation:
             ret_sol = []
             ret_act = []
             solution = solution.copy()
-            solution.addVehicle()
+            solution.add_empty_route(model)
             which1 = 0
             while which1 < len(solution.routes):
                 for which2, where2 in recharger2_which_where:
@@ -636,7 +636,7 @@ class Operation:
             return ret_sol, ret_act
 
     @staticmethod
-    def relocate_arc(solution: Solution, node1: Node, node2: Node) -> tuple:
+    def relocate_arc(model: Model, solution: Solution, node1: Node, node2: Node) -> tuple:
         '''
         去掉a，插入到b前，路间路内，客户与电站
         '''
@@ -656,7 +656,7 @@ class Operation:
             ret_act = []
             if len(solution.routes[which1].visit) != 3:
                 solution = solution.copy()
-                solution.addVehicle()
+                solution.add_empty_route(model)
             which2 = 0
             while which2 < len(solution.routes):
                 if not (which2 == which1 and where1 == len(solution.routes[which2].visit)-2):
@@ -720,7 +720,7 @@ class Operation:
             return ret_sol, ret_act
 
     @staticmethod
-    def exchange_arc(solution: Solution, node1: Node, node2: Node) -> tuple:
+    def exchange_arc(model: Model, solution: Solution, node1: Node, node2: Node) -> tuple:
         '''
         a后与b交换，路间路内，只有客户
         '''
@@ -764,7 +764,7 @@ class Operation:
             return [], []
 
     @staticmethod
-    def stationInRe_arc(solution: Solution, node1: Recharger, node2: Node) -> tuple:
+    def stationInRe_arc(model: Model, solution: Solution, node1: Recharger, node2: Node) -> tuple:
         assert not node1 is node2
         if not isinstance(node1, Recharger):
             return [], []

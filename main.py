@@ -11,7 +11,7 @@ file10 = 'data/small_evrptw_instances/Cplex10er/r102C10.txt'
 file15 = 'data/small_evrptw_instances/Cplex15er/rc108C15.txt'
 file100 = 'data/evrptw_instances/c101_21.txt'
 
-model = Model(file15, max_vehicle=100)
+model = Model(file5)
 model.read_data()
 # model.set_negative_demand(2)
 assert Operation.test_model(model)

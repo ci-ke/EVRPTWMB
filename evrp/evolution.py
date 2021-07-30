@@ -217,7 +217,7 @@ class VNS_TS:
             local_best_act = None
             for arc in select_arc:
                 for neighbor_opt in [Operation.two_opt_star_arc, Operation.relocate_arc, Operation.exchange_arc, Operation.stationInRe_arc]:
-                    neighbor_sol, neighbor_act = neighbor_opt(S, *arc)
+                    neighbor_sol, neighbor_act = neighbor_opt(self.model, S, *arc)
                     for sol in neighbor_sol:
                         assert sol.serve_all_customer(self.model)
                     for sol, act in zip(neighbor_sol, neighbor_act):
@@ -291,7 +291,7 @@ class VNS_TS:
             if feasibilityPhase:
                 if not S.feasible(self.model):
                     if i == self.eta_feas:
-                        S.addVehicle()
+                        S.add_empty_route(self.model)
                         i = -1
                 else:
                     feasibilityPhase = False
@@ -648,14 +648,14 @@ class DEMA:
                 num = len(S.routes)
                 # cost = S.sum_distance()
                 if self.S_best is None:
-                    self.S_best = S.copy()
+                    self.S_best = S
                     self.min_cost = cost
                 elif not self.S_best is None and num < len(self.S_best.routes):
-                    self.S_best = S.copy()
+                    self.S_best = S
                     self.min_cost = cost
                 elif not self.S_best is None and num == len(self.S_best.routes):
                     if cost < self.min_cost:
-                        self.S_best = S.copy()
+                        self.S_best = S
                         self.min_cost = cost
 
     def main(self) -> tuple:
