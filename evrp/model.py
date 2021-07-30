@@ -363,11 +363,10 @@ class Route:
             if node.demand >= 0:
                 new_node_load_weight = self.arrive_load_weight[i-1]
                 self.arrive_load_weight[:i] += node.demand
-                self.arrive_load_weight = np.insert(self.arrive_load_weight, i, new_node_load_weight)
             else:
                 new_node_load_weight = self.arrive_load_weight[i-1]-node.demand
                 self.arrive_load_weight[i] -= node.demand
-                self.arrive_load_weight = np.insert(self.arrive_load_weight, i, new_node_load_weight)
+            self.arrive_load_weight = np.insert(self.arrive_load_weight, i, new_node_load_weight)
 
             # 更新电量
             first_cost_battery = vehicle.battery_cost_speed*self.adjacent_distance[i-1]
@@ -437,8 +436,51 @@ class Route:
         # 更新之后的到达时间
         self.cal_arrive_time_after_index(vehicle, i)
 
-    def remove_node(self, i: int) -> None:
-        pass
+    def del_node(self, vehicle: Vehicle, i: int) -> None:
+        '''
+        删除i
+        '''
+        assert 1 <= i and i <= len(self.visit)-1
+
+        # 删除相邻距离
+        self.adjacent_distance = np.delete(self.adjacent_distance, i)
+        self.adjacent_distance[i-1] = self.visit[i-1].distance_to(self.visit[i+1])
+
+        if isinstance(self.visit[i], Customer):
+            # 更新载重
+            if self.visit[i].demand >= 0:
+                self.arrive_load_weight[:i] -= self.visit[i].demand
+            else:
+                self.arrive_load_weight[i:] += self.visit[i].demand
+            self.arrive_load_weight = np.delete(self.arrive_load_weight, i)
+
+        elif isinstance(self.visit[i], Recharger):
+            # 更新载重
+            self.arrive_load_weight = np.delete(self.arrive_load_weight, i)
+            self.rechargers = np.delete(self.rechargers, np.where(self.rechargers == i))
+
+        else:
+            raise Exception('impossible')
+
+        # 更新电量
+        self.arrive_remain_battery = np.delete(self.arrive_remain_battery, i)
+        if isinstance(self.visit[i-1], Recharger):
+            i_next_battery = vehicle.max_battery-self.adjacent_distance[i-1]*vehicle.battery_cost_speed
+        else:
+            i_next_battery = self.arrive_remain_battery[i-1]-self.adjacent_distance[i-1]*vehicle.battery_cost_speed
+        difference = i_next_battery-self.arrive_remain_battery[i]
+        next_station = np.extract(self.rechargers > i, self.rechargers)
+        if len(next_station) == 0:
+            self.arrive_remain_battery[i:] += difference
+        else:
+            self.arrive_remain_battery[i:next_station[0]+1] += difference
+
+        # 删除访问节点
+        del self.visit[i]
+
+        # 更新之后的到达时间
+        self.arrive_time=np.delete(self.arrive_time,i)
+        self.cal_arrive_time_after_index(vehicle, i-1)
 
 
 class Model:
