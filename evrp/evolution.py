@@ -306,8 +306,8 @@ class DEMA:
     # 构造属性
     model = None
     penalty = (15, 5, 10)
-    maxiter_evo = 100
-    size = 30
+    maxiter_evo = 200
+    size = 15
     infeasible_proportion = 0.25
     sigma = (1, 5, 10)
     theta = 0.7

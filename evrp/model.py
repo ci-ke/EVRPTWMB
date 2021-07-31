@@ -362,6 +362,7 @@ class Route:
         i = int(i)
         # 插入访问节点
         self.visit.insert(i, node)
+        return
         # 更新两点距离
         self.adjacent_distance[i-1] = node.distance_to(self.visit[i-1])
         new_distance = node.distance_to(self.visit[i+1])
@@ -452,6 +453,8 @@ class Route:
         '''
         assert 1 <= i and i <= len(self.visit)-1
         i = int(i)
+        del self.visit[i]
+        return
         # 删除相邻距离
         self.adjacent_distance = np.delete(self.adjacent_distance, i)
         self.adjacent_distance[i-1] = self.visit[i-1].distance_to(self.visit[i+1])

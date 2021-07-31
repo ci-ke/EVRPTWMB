@@ -31,15 +31,15 @@ class Operation:
     @staticmethod
     def two_opt_star_action(solution: Solution, model: Model, first_which: int, first_where: int, second_which: int, second_where: int) -> Solution:
         assert first_which != second_which
-        ret_sol = solution.copy()
+        ret_sol = solution.copy_clear()
         ret_sol.routes[first_which].visit[first_where+1:] = solution.routes[second_which].visit[second_where+1:]
         ret_sol.routes[second_which].visit[second_where+1:] = solution.routes[first_which].visit[first_where+1:]
 
-        ret_sol.routes[first_which].clear_status()
-        ret_sol.routes[second_which].clear_status()
-        
-        ret_sol.routes[first_which].feasible(model.vehicle)
-        ret_sol.routes[second_which].feasible(model.vehicle)
+        #ret_sol.routes[first_which].clear_status()
+        #ret_sol.routes[second_which].clear_status()
+        #
+        #ret_sol.routes[first_which].feasible(model.vehicle)
+        #ret_sol.routes[second_which].feasible(model.vehicle)
 
         ret_sol.routes[first_which].remove_depot_to_recharger0(model.vehicle)
         ret_sol.routes[first_which].remove_successive_recharger(model.vehicle)
@@ -77,7 +77,7 @@ class Operation:
 
     @staticmethod
     def relocate_action(solution: Solution, model: Model, which: int, where: int, new_which: int, new_where: int) -> Solution:
-        ret_sol = solution.copy()
+        ret_sol = solution.copy_clear()
         if new_which != which:
             #ret_sol[new_which].visit.insert(new_where, solution.routes[which].visit[where])
             ret_sol[new_which].add_node(model.vehicle, new_where, solution.routes[which].visit[where])
@@ -127,7 +127,7 @@ class Operation:
 
     @staticmethod
     def exchange_action(solution: Solution, model: Model, which1: int, where1: int, which2: int, where2: int) -> Solution:
-        ret_sol = solution.copy()
+        ret_sol = solution.copy_clear()
         #ret_sol.routes[which1].visit[where1] = solution.routes[which2].visit[where2]
         ret_sol.routes[which1].del_node(model.vehicle, where1)
         ret_sol.routes[which1].add_node(model.vehicle, where1, solution.routes[which2].visit[where2])
@@ -157,7 +157,7 @@ class Operation:
 
     @staticmethod
     def stationInRe_action(solution: Solution, model: Model, recharger: Recharger, which: int, where: int) -> Solution:
-        ret_sol = solution.copy()
+        ret_sol = solution.copy_clear()
         if ret_sol.routes[which].visit[where-1] is recharger:
             #del ret_sol.routes[which].visit[where-1]
             ret_sol.routes[which].del_node(model.vehicle, where-1)
@@ -180,7 +180,7 @@ class Operation:
 
     @staticmethod
     def two_opt_action(solution: Solution, model: Model, which: int, where1: int, where2: int) -> Solution:
-        ret_sol = solution.copy()
+        ret_sol = solution.copy_clear()
         ret_sol.routes[which].visit[where1:where2+1] = reversed(solution.routes[which].visit[where1:where2+1])
         ret_sol.routes[which].clear_status()
 
@@ -215,7 +215,7 @@ class Operation:
 
     @staticmethod
     def ACO_GM_cross1(solution: Solution, model: Model) -> Solution:
-        solution = solution.copy()
+        solution = solution.copy_clear()
         if len(solution.routes) > 1:
             avg_dis = np.zeros(len(solution.routes), dtype=float)
             for i, route in enumerate(solution.routes):
@@ -232,12 +232,12 @@ class Operation:
                     #solution.routes[to_route].visit.insert(insert_place_to_route, node)
                     solution.routes[to_route].add_node(model.vehicle, insert_place_to_route, node)
             solution.remove_route_index(select)
-        # solution.clear_status()
+        solution.clear_status()
         return solution
 
     @staticmethod
     def ACO_GM_cross2(solution1: Solution, solution2: Solution, model: Model) -> Solution:
-        solution1 = solution1.copy()
+        solution1 = solution1.copy_clear()
         avg_dis_reciprocal = np.zeros(len(solution2.routes), dtype=float)
         for i, route in enumerate(solution2.routes):
             avg_dis_reciprocal[i] = 1/route.avg_distance()
@@ -264,7 +264,7 @@ class Operation:
             #solution1.routes[to_route].visit.insert(insert_place_to_route, node)
             solution1.routes[to_route].add_node(model.vehicle, insert_place_to_route, node)
         solution1.remove_empty_route()
-        # solution1.clear_status()
+        solution1.clear_status()
         return solution1
 
     @staticmethod
@@ -395,7 +395,7 @@ class Operation:
 
     @staticmethod
     def fix_time(solution: Solution, model: Model) -> Solution:
-        solution = solution.copy()
+        solution = solution.copy_clear()
 
         for route in solution.routes:
             if route.feasible_time(model.vehicle)[0] == False:
@@ -566,7 +566,7 @@ class Operation:
                 return [], []
             ret_sol = []
             ret_act = []
-            solution = solution.copy()
+            solution = solution.copy_clear()
             solution.add_empty_route(model)
             which2 = 0
             while which2 < len(solution.routes):
@@ -605,7 +605,7 @@ class Operation:
             recharger1_which_where = Operation.find_recharger(solution, node1)
             ret_sol = []
             ret_act = []
-            solution = solution.copy()
+            solution = solution.copy_clear()
             solution.add_empty_route(model)
             for which1, where1 in recharger1_which_where:
                 if where1 == len(solution.routes[which1].visit)-2:
@@ -626,7 +626,7 @@ class Operation:
                 return [], []
             ret_sol = []
             ret_act = []
-            solution = solution.copy()
+            solution = solution.copy_clear()
             solution.add_empty_route(model)
             which1 = 0
             while which1 < len(solution.routes):
@@ -641,7 +641,7 @@ class Operation:
             recharger2_which_where = Operation.find_recharger(solution, node2)
             ret_sol = []
             ret_act = []
-            solution = solution.copy()
+            solution = solution.copy_clear()
             solution.add_empty_route(model)
             which1 = 0
             while which1 < len(solution.routes):
@@ -676,7 +676,7 @@ class Operation:
             ret_sol = []
             ret_act = []
             if len(solution.routes[which1].visit) != 3:
-                solution = solution.copy()
+                solution = solution.copy_clear()
                 solution.add_empty_route(model)
             which2 = 0
             while which2 < len(solution.routes):
