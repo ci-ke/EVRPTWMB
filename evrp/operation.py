@@ -35,11 +35,11 @@ class Operation:
         ret_sol.routes[first_which].visit[first_where+1:] = solution.routes[second_which].visit[second_where+1:]
         ret_sol.routes[second_which].visit[second_where+1:] = solution.routes[first_which].visit[first_where+1:]
 
-        #ret_sol.routes[first_which].clear_status()
-        #ret_sol.routes[second_which].clear_status()
+        # ret_sol.routes[first_which].clear_status()
+        # ret_sol.routes[second_which].clear_status()
         #
-        #ret_sol.routes[first_which].feasible(model.vehicle)
-        #ret_sol.routes[second_which].feasible(model.vehicle)
+        # ret_sol.routes[first_which].feasible(model.vehicle)
+        # ret_sol.routes[second_which].feasible(model.vehicle)
 
         ret_sol.routes[first_which].remove_depot_to_recharger0(model.vehicle)
         ret_sol.routes[first_which].remove_successive_recharger(model.vehicle)
@@ -158,7 +158,7 @@ class Operation:
     @staticmethod
     def stationInRe_action(solution: Solution, model: Model, recharger: Recharger, which: int, where: int) -> Solution:
         ret_sol = solution.copy_clear()
-        if ret_sol.routes[which].visit[where-1] is recharger:
+        if ret_sol.routes[which].visit[where-1].eq(recharger):
             #del ret_sol.routes[which].visit[where-1]
             ret_sol.routes[which].del_node(model.vehicle, where-1)
         else:
@@ -459,7 +459,7 @@ class Operation:
             cur_where = 1
             while cur_where < len(solution.routes[cur_which].visit)-1 and flag:
                 cur_node = solution.routes[cur_which].visit[cur_where]
-                if cur_node is node:
+                if cur_node.eq(node):
                     which = cur_which
                     where = cur_where
                     flag = False
@@ -475,7 +475,7 @@ class Operation:
             cur_where = 1
             while cur_where < len(solution.routes[cur_which].visit)-1:
                 cur_node = solution.routes[cur_which].visit[cur_where]
-                if cur_node is node:
+                if cur_node.eq(node):
                     recharger_which_where.append((cur_which, cur_where))
                 cur_where += 1
             cur_which += 1
@@ -489,11 +489,11 @@ class Operation:
             where = 1
             while where < len(solution.routes[which].visit)-1 and flag != 2:
                 node = solution.routes[which].visit[where]
-                if node is node1:
+                if node.eq(node1):
                     which1 = which
                     where1 = where
                     flag += 1
-                elif node is node2:
+                elif node.eq(node2):
                     which2 = which
                     where2 = where
                     flag += 1
@@ -510,9 +510,9 @@ class Operation:
             where = 1
             while where < len(solution.routes[which].visit)-1:
                 node = solution.routes[which].visit[where]
-                if node is node1:
+                if node.eq(node1):
                     recharger1_which_where.append((which, where))
-                elif node is node2:
+                elif node.eq(node2):
                     recharger2_which_where.append((which, where))
                 where += 1
             which += 1
@@ -526,10 +526,10 @@ class Operation:
             where = 1
             while where < len(solution.routes[which].visit)-1:
                 node = solution.routes[which].visit[where]
-                if node is node1:
+                if node.eq(node1):
                     which1 = which
                     where1 = where
-                elif node is node2:
+                elif node.eq(node2):
                     recharger2_which_where.append((which, where))
                 where += 1
             which += 1
@@ -540,7 +540,7 @@ class Operation:
         '''
         a后的边，与b前的边，去掉，交换后半部分再连起来，路间
         '''
-        assert not node1 is node2
+        assert not node1.eq(node2)
         if isinstance(node1, Customer) and isinstance(node2, Customer):
             which1, where1, which2, where2 = Operation.find_two_customer(solution, node1, node2)
             if which1 == which2:
@@ -661,7 +661,7 @@ class Operation:
         '''
         去掉a，插入到b前，路间路内，客户与电站
         '''
-        assert not node1 is node2
+        assert not node1.eq(node2)
         if isinstance(node1, Depot):
             return [], []
         elif isinstance(node1, Customer) and isinstance(node2, Customer):
@@ -745,7 +745,7 @@ class Operation:
         '''
         a后与b交换，路间路内，只有客户
         '''
-        assert not node1 is node2
+        assert not node1.eq(node2)
         if isinstance(node2, Customer):
             if isinstance(node1, Customer):
                 which1, where1, which2, where2 = Operation.find_two_customer(solution, node1, node2)
@@ -786,7 +786,7 @@ class Operation:
 
     @staticmethod
     def stationInRe_arc(model: Model, solution: Solution, node1: Recharger, node2: Node) -> tuple:
-        assert not node1 is node2
+        assert not node1.eq(node2)
         if not isinstance(node1, Recharger):
             return [], []
         if isinstance(node2, Customer):
@@ -840,4 +840,14 @@ class Operation:
 
         pickle_file = open('result/'+filename+suffix+'.pickle', 'wb')
         pickle.dump(S, pickle_file)
+        pickle_file.close()
+
+    @staticmethod
+    def freeze_evo(evo, model: Model, suffix: str = '') -> None:
+        if not os.path.exists('result'):
+            os.mkdir('result')
+        filename = model.data_file.split('/')[-1].split('.')[0]
+
+        pickle_file = open('result/'+filename+'_evo'+suffix+'.pickle', 'wb')
+        pickle.dump(evo.freeze(), pickle_file)
         pickle_file.close()

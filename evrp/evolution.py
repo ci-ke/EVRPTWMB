@@ -1,5 +1,5 @@
 import collections
-import multiprocessing as mp
+import pickle
 
 from .model import *
 from .util import *
@@ -97,7 +97,7 @@ class VNS_TS:
             for node2 in all_node_list:
                 if (isinstance(node1, Depot) and isinstance(node2, Recharger) and (node1.x == node2.x and node1.y == node2.y)) or (isinstance(node1, Recharger) and isinstance(node2, Depot) and (node1.x == node2.x and node1.y == node2.y)):
                     continue
-                if not node1 is node2:
+                if not node1.eq(node2):
                     distance = node1.distance_to(node2)
                     if isinstance(node1, Customer) and isinstance(node2, Customer) and (node1.demand+node2.demand) > self.model.vehicle.capacity:
                         continue
@@ -306,8 +306,8 @@ class DEMA:
     # 构造属性
     model = None
     penalty = (15, 5, 10)
-    maxiter_evo = 200
-    size = 15
+    maxiter_evo = 100
+    size = 30
     infeasible_proportion = 0.25
     sigma = (1, 5, 10)
     theta = 0.7
@@ -668,4 +668,22 @@ class DEMA:
             P = self.ISSD(P+P_child, iter)
             P = self.MVS(P, iter)
             self.update_S(P)
+            self.P = P
+        return self.S_best, self.min_cost
+
+    def freeze(self) -> None:
+        return [self.S_best, self.min_cost, self.P]
+
+    def start_from_freeze(self, pack) -> None:
+        self.S_best = pack[0]
+        self.min_cost = pack[1]
+        P = pack[2]
+        self.update_S(P)
+        for iter in range(self.maxiter_evo):
+            print(iter, len(self.S_best), self.min_cost)
+            P_child = self.ACO_GM(P)
+            P = self.ISSD(P+P_child, iter)
+            P = self.MVS(P, iter)
+            self.update_S(P)
+            self.P = P
         return self.S_best, self.min_cost

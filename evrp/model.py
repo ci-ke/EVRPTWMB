@@ -22,6 +22,14 @@ class Node(metaclass=ABCMeta):
         # return '{} {} at {}'.format(type(self).__name__, self.id, id(self))
         return '{} {}'.format(type(self).__name__, self.id)
 
+    def eq(self, other) -> bool:
+        if type(self) != type(other):
+            return False
+        if self.id == other.id:
+            return True
+        else:
+            return False
+
     def distance_to(self, node: object) -> float:
         assert isinstance(node, Node)
         return ((self.x-node.x)**2+(self.y-node.y)**2)**0.5
@@ -767,7 +775,7 @@ class Solution:
         for route in self.routes:
             for node in route.visit[1:-1]:
                 if isinstance(node, Customer):
-                    served_cus_list.append(node)
+                    served_cus_list.append(node.id)
         served_cus_set = set(served_cus_list)
         if len(served_cus_list) != len(served_cus_set):
             return False

@@ -1,4 +1,5 @@
 import random
+import pickle
 
 from evrp.model import *
 from evrp.operation import *
@@ -18,7 +19,8 @@ assert Operation.test_model(model)
 
 try:
     evo = DEMA(model, maxiter_evo=300, size=10)
-    evo.main()
+    pack = pickle.load(open('result/rc103C15_evo_ahead.pickle', 'rb'))
+    evo.start_from_freeze(pack)
     Operation.output_to_file(model, evo.S_best)
     Operation.freeze_evo(evo, model)
 
