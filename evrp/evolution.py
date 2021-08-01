@@ -1,5 +1,4 @@
 import collections
-import pickle
 
 from .model import *
 from .util import *
@@ -660,8 +659,11 @@ class DEMA:
                         self.S_best = S
                         self.min_cost = cost
 
-    def main(self) -> tuple:
-        P = self.initialization()
+    def main(self, icecube: list = None) -> tuple:
+        if icecube is None:
+            P = self.initialization()
+        else:
+            self.S_best, self.min_cost, P = icecube
         self.update_S(P)
         for iter in range(self.maxiter_evo):
             print(iter, len(self.S_best), self.min_cost)
@@ -672,19 +674,5 @@ class DEMA:
             self.P = P
         return self.S_best, self.min_cost
 
-    def freeze(self) -> None:
+    def freeze(self) -> list:
         return [self.S_best, self.min_cost, self.P]
-
-    def start_from_freeze(self, pack) -> None:
-        self.S_best = pack[0]
-        self.min_cost = pack[1]
-        P = pack[2]
-        self.update_S(P)
-        for iter in range(self.maxiter_evo):
-            print(iter, len(self.S_best), self.min_cost)
-            P_child = self.ACO_GM(P)
-            P = self.ISSD(P+P_child, iter)
-            P = self.MVS(P, iter)
-            self.update_S(P)
-            self.P = P
-        return self.S_best, self.min_cost
