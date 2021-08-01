@@ -838,9 +838,9 @@ class Operation:
         output_file.write(str(S)+'\n'+str(S.sum_distance())+'\n'+str(S.feasible_detail(model))+'\n\n')
         output_file.close()
 
-        pickle_file = open('result/'+filename+suffix+'.pickle', 'wb')
-        pickle.dump(S, pickle_file)
-        pickle_file.close()
+        #pickle_file = open('result/'+filename+suffix+'.pickle', 'wb')
+        #pickle.dump(S, pickle_file)
+        #pickle_file.close()
 
     @staticmethod
     def freeze_evo(evo, model: Model, suffix: str = '') -> None:

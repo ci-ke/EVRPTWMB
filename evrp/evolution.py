@@ -526,7 +526,8 @@ class DEMA:
             objective = DEMA.get_objective(sol, self.model, self.penalty)
             obj_value.append([objective, overlapping_degree])
         SP2 = Util.pareto_sort(SP2, obj_value)
-        sp1up = int((iter/self.maxiter_evo)*self.size)
+        #sp1up = int((iter/self.maxiter_evo)*self.size)
+        sp1up = int((1-self.infeasible_proportion)*self.size)
         sp2up = self.size-sp1up
         P = SP1[:sp1up]+SP2[:sp2up]
         SP1 = SP1[sp1up:]

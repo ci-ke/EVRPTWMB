@@ -17,7 +17,7 @@ model.read_data()
 assert Operation.test_model(model)
 
 try:
-    evo = DEMA(model, maxiter_evo=300, size=10)
+    evo = DEMA(model, maxiter_evo=300, size=20)
     evo.main()
     Operation.output_to_file(model, evo.S_best)
     Operation.freeze_evo(evo, model)
