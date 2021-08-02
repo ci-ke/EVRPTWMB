@@ -840,7 +840,7 @@ class Operation:
 
         #pickle_file = open('result/'+filename+suffix+'.pickle', 'wb')
         #pickle.dump(S, pickle_file)
-        #pickle_file.close()
+        # pickle_file.close()
 
     @staticmethod
     def freeze_evo(evo, model: Model, suffix: str = '') -> None:
@@ -848,6 +848,13 @@ class Operation:
             os.mkdir('result')
         filename = model.data_file.split('/')[-1].split('.')[0]
 
-        pickle_file = open('result/'+filename+'_evo'+suffix+'.pickle', 'wb')
+        num = 1
+        base_pickle_filepath = 'result/'+filename+'_evo'+suffix+'.pickle'
+        pickle_filepath = base_pickle_filepath
+        while os.path.exists(pickle_filepath):
+            pickle_filepath = base_pickle_filepath[:-7]+str(num)+base_pickle_filepath[-7:]
+            num += 1
+
+        pickle_file = open(pickle_filepath, 'wb')
         pickle.dump(evo.freeze(), pickle_file)
         pickle_file.close()
