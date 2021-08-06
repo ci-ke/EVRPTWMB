@@ -1,5 +1,6 @@
 import random
 import sys
+import traceback
 
 from evrp.model import *
 from evrp.operation import *
@@ -43,7 +44,7 @@ def run():
     filepath, icecube = process_input(sys.argv)
     model = Model(filepath)
     model.read_data()
-    # model.set_negative_demand(2)
+    model.set_negative_demand(2)
     assert Operation.test_model(model)
 
     try:
@@ -52,7 +53,8 @@ def run():
         Operation.output_to_file(model, evo.S_best)
         Operation.freeze_evo(evo, model)
 
-    except KeyboardInterrupt:
+    except:
+        traceback.print_exc()
         print(evo.S_best)
         Operation.output_to_file(model, evo.S_best, '_ahead')
         Operation.freeze_evo(evo, model, '_ahead')
