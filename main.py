@@ -53,11 +53,11 @@ def run():
         Operation.output_to_file(model, evo.S_best)
         Operation.freeze_evo(evo, model)
 
-    except:
-        traceback.print_exc()
+    except BaseException as e:
         print(evo.S_best)
         Operation.output_to_file(model, evo.S_best, '_ahead')
         Operation.freeze_evo(evo, model, '_ahead')
+        raise e
 
 
 if __name__ == '__main__':

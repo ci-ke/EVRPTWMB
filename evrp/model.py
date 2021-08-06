@@ -148,9 +148,9 @@ class Route:
     def cal_load_weight(self, vehicle: Vehicle) -> None:
         demand = np.array([cus.demand for cus in self.visit])
         start_load_weight = np.sum(demand, where=demand > 0)
-        if start_load_weight > vehicle.capacity:
-            self.arrive_load_weight = np.array([start_load_weight])
-            return
+        #if start_load_weight > vehicle.capacity:
+        #    self.arrive_load_weight = np.array([start_load_weight])
+        #    return
         demand_vary = np.cumsum(demand)
         self.arrive_load_weight = start_load_weight-demand_vary
 

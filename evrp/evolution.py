@@ -547,6 +547,7 @@ class DEMA:
     def tabu_search_vnsts(self, solution: Solution) -> Solution:
         if getattr(self, 'vnsts', None) is None:
             self.vnsts = VNS_TS(self.model)
+            self.vnsts.penalty = self.penalty
         sol = self.vnsts.tabu_search(solution)
         return sol
 
