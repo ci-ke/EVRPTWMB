@@ -10,8 +10,8 @@ from evrp.util import *
 def run(input_list: list) -> None:
     filepath, icecube = Util.process_input(input_list)
     model = Model(filepath)
-    model.read_data()
-    # model.set_negative_demand(2)
+    model.read_data_as_VRPTW()
+    #model.set_negative_demand(2)
     assert Operation.test_model(model)
 
     try:

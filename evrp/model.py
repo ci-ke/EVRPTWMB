@@ -677,10 +677,26 @@ class Model:
             cus.over_time = float('inf')
         self.vehicle.battery_cost_speed = 0
 
+    def __read_solomon_data(self):
+        fp = open(self.data_file)
+        self.vehicle = Vehicle(max_battery=float('inf'), battery_cost_speed=0, velocity=1)
+        self.customers = []
+        for num, line in enumerate(fp.readlines()):
+            if num == 4:
+                self.vehicle.capacity = int(line.split()[1])
+            if num <= 8:  # 跳过无关行
+                continue
+            cus_no, x_coord, y_coord, demand, ready_time, over_time, service_time = [float(x) for x in line.split()]
+            if cus_no == 0:
+                self.depot = Depot(int(cus_no), x_coord, y_coord, over_time)
+            else:
+                cus = Customer(int(cus_no), x_coord, y_coord, demand, ready_time, over_time, service_time)
+                self.customers.append(cus)
+        fp.close()
+
     def read_data_as_VRPTW(self) -> None:
-        self.read_data()
+        self.__read_solomon_data()
         self.rechargers = []
-        self.vehicle.battery_cost_speed = 0
 
 
 class Solution:

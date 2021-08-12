@@ -108,6 +108,9 @@ class Util:
         elif file_type == 'n':
             folder = 'data/evrptw_instances/'
             filename = map_name+'_21.txt'
+        elif file_type == 'tw':
+            folder = 'data/solomon/'
+            filename = map_name+'.txt'
 
         filepath = folder+filename
 
