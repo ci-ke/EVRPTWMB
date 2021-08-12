@@ -593,19 +593,27 @@ class Model:
         cus_max_x = max(cus_x)
         cus_min_y = min(cus_y)
         cus_max_y = max(cus_y)
-        rec_x = [rec.x for rec in self.rechargers]
-        rec_y = [rec.y for rec in self.rechargers]
-        rec_min_x = min(rec_x)
-        rec_max_x = max(rec_x)
-        rec_min_y = min(rec_y)
-        rec_max_y = max(rec_y)
-        min_x = min(cus_min_x, rec_min_x, self.depot.x)
-        max_x = max(cus_max_x, rec_max_x, self.depot.x)
-        min_y = min(cus_min_y, rec_min_y, self.depot.y)
-        max_y = max(cus_max_y, rec_max_y, self.depot.y)
+        if len(self.rechargers) != 0:
+            rec_x = [rec.x for rec in self.rechargers]
+            rec_y = [rec.y for rec in self.rechargers]
+            rec_min_x = min(rec_x)
+            rec_max_x = max(rec_x)
+            rec_min_y = min(rec_y)
+            rec_max_y = max(rec_y)
+            min_x = min(cus_min_x, rec_min_x, self.depot.x)
+            max_x = max(cus_max_x, rec_max_x, self.depot.x)
+            min_y = min(cus_min_y, rec_min_y, self.depot.y)
+            max_y = max(cus_max_y, rec_max_y, self.depot.y)
+        else:
+            min_x = min(cus_min_x, self.depot.x)
+            max_x = max(cus_max_x, self.depot.x)
+            min_y = min(cus_min_y, self.depot.y)
+            max_y = max(cus_max_y, self.depot.y)
         return min_x, max_x, min_y, max_y
 
     def find_nearest_station(self) -> None:
+        if len(self.rechargers) == 0:
+            return
         self.nearest_station = {}
         station00 = None
         for station in self.rechargers:
@@ -659,6 +667,20 @@ class Model:
         ret.adjacent_distance = np.array([0.0])  # 两点距离 向量
         ret.rechargers = np.array([])  # 充电桩索引 向量
         return ret
+
+    def read_data_as_VRP(self) -> None:
+        self.read_data()
+        self.rechargers = []
+        self.depot.over_time = float('inf')
+        for cus in self.customers:
+            cus.ready_time = 0
+            cus.over_time = float('inf')
+        self.vehicle.battery_cost_speed = 0
+
+    def read_data_as_VRPTW(self) -> None:
+        self.read_data()
+        self.rechargers = []
+        self.vehicle.battery_cost_speed = 0
 
 
 class Solution:

@@ -132,7 +132,7 @@ class VNS_TS(Evolution):
                         continue
                     if node1.ready_time+node1.service_time+distance+node2.service_time+node2.distance_to(self.model.depot) > self.model.depot.over_time:
                         continue
-                    if isinstance(node1, Customer) and isinstance(node2, Customer):
+                    if len(self.model.rechargers) != 0 and isinstance(node1, Customer) and isinstance(node2, Customer):
                         recharger1 = self.model.nearest_station[node1][0]
                         recharger2 = self.model.nearest_station[node2][0]
                         if self.model.vehicle.battery_cost_speed*(node1.distance_to(recharger1)+distance+node2.distance_to(recharger2)) > self.model.vehicle.max_battery:
