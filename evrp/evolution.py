@@ -1,3 +1,5 @@
+import os
+import pickle
 import collections
 
 from .model import *
@@ -5,7 +7,33 @@ from .util import *
 from .operation import *
 
 
-class VNS_TS:
+class Evolution(metaclass=ABCMeta):
+    def output_to_file(self, suffix: str = '') -> None:
+        if not os.path.exists('result'):
+            os.mkdir('result')
+        filename = self.model.data_file.split('/')[-1].split('.')[0]
+        output_file = open('result/'+filename+suffix+'.txt', 'a')
+        output_file.write(str(self.S_best)+'\n'+str(self.S_best.sum_distance())+'\n'+str(self.S_best.feasible_detail(self.model))+'\n\n')
+        output_file.close()
+
+    def freeze_evo(self, suffix: str = '') -> None:
+        if not os.path.exists('result'):
+            os.mkdir('result')
+        filename = self.model.data_file.split('/')[-1].split('.')[0]
+
+        num = 1
+        base_pickle_filepath = 'result/'+filename+'_evo'+suffix+'.pickle'
+        pickle_filepath = base_pickle_filepath
+        while os.path.exists(pickle_filepath):
+            pickle_filepath = base_pickle_filepath[:-7]+str(num)+base_pickle_filepath[-7:]
+            num += 1
+
+        pickle_file = open(pickle_filepath, 'wb')
+        pickle.dump(self.freeze(), pickle_file)
+        pickle_file.close()
+
+
+class VNS_TS(Evolution):
     # 构造属性
     model = None
 
@@ -216,7 +244,7 @@ class VNS_TS:
             local_best_S = None
             local_best_act = None
             for arc in select_arc:
-                for neighbor_opt in [Operation.two_opt_star_arc, Operation.relocate_arc, Operation.exchange_arc, Operation.stationInRe_arc]:
+                for neighbor_opt in [Modification.two_opt_star_arc, Modification.relocate_arc, Modification.exchange_arc, Modification.stationInRe_arc]:
                     neighbor_sol, neighbor_act = neighbor_opt(self.model, S, *arc)
                     for sol in neighbor_sol:
                         assert sol.serve_all_customer(self.model)
@@ -280,7 +308,7 @@ class VNS_TS:
 
             print(i, S.feasible(self.model), len(S), VNS_TS.get_objective(S, self.model, self.penalty))
 
-            S1 = Operation.cyclic_exchange(S, self.model, *self.vns_neighbour[k])
+            S1 = Modification.cyclic_exchange(S, self.model, *self.vns_neighbour[k])
             S2 = self.tabu_search(S1)
             if self.compare_better(S2, S) or (feasibilityPhase and self.acceptSA_feas(S2, S, i)) or (not feasibilityPhase and self.acceptSA_dist(S2, S, i)):
                 S = S2
@@ -301,7 +329,7 @@ class VNS_TS:
         return S
 
 
-class DEMA:
+class DEMA(Evolution):
     # 构造属性
     model = None
     penalty = (15, 5, 10)
@@ -428,12 +456,12 @@ class DEMA:
                 fes_dic = sol.feasible_detail(self.model)
                 for _, value in fes_dic.items():
                     if value[1] == 'battery':
-                        sol = Operation.charging_modification(sol, self.model)
+                        sol = Modification.charging_modification(sol, self.model)
                         assert sol.serve_all_customer(self.model)
                         times += 1
                         break
                     if value[1] == 'time':
-                        sol = Operation.fix_time(sol, self.model)
+                        sol = Modification.fix_time(sol, self.model)
                         assert sol.serve_all_customer(self.model)
                         times += 1
                         break
@@ -489,11 +517,11 @@ class DEMA:
 
             if sel == 0:
                 S_parent = random.choice(P_parent)
-                S = Operation.ACO_GM_cross1(S_parent, self.model)
+                S = Modification.ACO_GM_cross1(S_parent, self.model)
                 assert S.serve_all_customer(self.model)
             elif sel == 1:
                 S_parent, S2 = random.sample(P_parent, 2)
-                S = Operation.ACO_GM_cross2(S_parent, S2, self.model)
+                S = Modification.ACO_GM_cross2(S_parent, S2, self.model)
                 assert S.serve_all_customer(self.model)
 
             cross_call_times[sel] += 1
@@ -562,19 +590,19 @@ class DEMA:
             while len(actions) < neighbor_num:
                 act = random.choice(['exchange', 'relocate', 'two-opt', 'stationInRe'])
                 if act == 'exchange':
-                    target = Operation.exchange_choose(solution)
+                    target = Modification.exchange_choose(solution)
                     if ('exchange', *target) not in actions:
                         actions.append(('exchange', *target))
                 elif act == 'relocate':
-                    target = Operation.relocate_choose(solution)
+                    target = Modification.relocate_choose(solution)
                     if ('relocate', *target) not in actions:
                         actions.append(('relocate', *target))
                 elif act == 'two-opt':
-                    target = Operation.two_opt_choose(solution)
+                    target = Modification.two_opt_choose(solution)
                     if ('two-opt', *target) not in actions:
                         actions.append(('two-opt', *target))
                 elif act == 'stationInRe':
-                    target = Operation.stationInRe_choose(solution, self.model)
+                    target = Modification.stationInRe_choose(solution, self.model)
                     if ('stationInRe', *target) not in actions:
                         actions.append(('stationInRe', *target))
             local_best_sol = solution
@@ -584,13 +612,13 @@ class DEMA:
                 tabu_status = tabu_list.get(action, 0)
                 if tabu_status == 0:
                     if action[0] == 'exchange':
-                        try_sol = Operation.exchange_action(solution, *action[1:])
+                        try_sol = Modification.exchange_action(solution, *action[1:])
                     elif action[0] == 'relocate':
-                        try_sol = Operation.relocate_action(solution, *action[1:])
+                        try_sol = Modification.relocate_action(solution, *action[1:])
                     elif action[0] == 'two-opt':
-                        try_sol = Operation.two_opt_action(solution, *action[1:])
+                        try_sol = Modification.two_opt_action(solution, *action[1:])
                     elif action[0] == 'stationInRe':
-                        try_sol = Operation.stationInRe_action(solution, *action[1:])
+                        try_sol = Modification.stationInRe_action(solution, *action[1:])
                     try_val = DEMA.get_objective(try_sol, self.model, self.penalty)
                     if try_val < local_best_val:
                         local_best_sol = try_sol
@@ -638,7 +666,7 @@ class DEMA:
             retP = []
             for i, sol in enumerate(P):
                 print(iter, 'charge', i)
-                retP.append(Operation.charging_modification(sol, self.model))
+                retP.append(Modification.charging_modification(sol, self.model))
             self.last_charge_modify = 0
             return retP
         return P

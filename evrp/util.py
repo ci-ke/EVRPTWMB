@@ -1,4 +1,5 @@
 import random
+import pickle
 import numpy as np
 import geatpy as ea
 
@@ -83,3 +84,36 @@ class Util:
             if len(sortP) < needNum:
                 sortP.append(P[i])
         return sortP
+
+    @staticmethod
+    def process_input(input_list: list):
+        file_type = input_list[1]  # n s5 s10 s15
+        map_name = input_list[2]  # c101 r201
+        mode = input_list[3]  # n(new) c(continue)
+        if len(input_list) == 5:
+            if input_list[4] == '.':
+                suffix = ''
+            else:
+                suffix = input_list[4]  # _ahead
+
+        if file_type == 's5':
+            folder = 'data/small_evrptw_instances/Cplex5er/'
+            filename = map_name+'C5.txt'
+        elif file_type == 's10':
+            folder = 'data/small_evrptw_instances/Cplex10er/'
+            filename = map_name+'C10.txt'
+        elif file_type == 's15':
+            folder = 'data/small_evrptw_instances/Cplex15er/'
+            filename = map_name+'C15.txt'
+        elif file_type == 'n':
+            folder = 'data/evrptw_instances/'
+            filename = map_name+'_21.txt'
+
+        filepath = folder+filename
+
+        if mode == 'n':
+            icecube = None
+        elif mode == 'c':
+            icecube = pickle.load(open('result/{}_evo{}.pickle'.format(filename.split('.')[0], suffix), 'rb'))
+
+        return filepath, icecube

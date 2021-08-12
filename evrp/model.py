@@ -128,10 +128,6 @@ class Route:
             ret.rechargers = self.rechargers.copy()
         return ret
 
-    def copy_clear(self) -> object:
-        ret = Route(self.visit[:])
-        return ret
-
     def sum_distance(self) -> float:
         if self.adjacent_distance is None:
             self.cal_adjacent_distance()
@@ -148,7 +144,7 @@ class Route:
     def cal_load_weight(self, vehicle: Vehicle) -> None:
         demand = np.array([cus.demand for cus in self.visit])
         start_load_weight = np.sum(demand, where=demand > 0)
-        #if start_load_weight > vehicle.capacity:
+        # if start_load_weight > vehicle.capacity:
         #    self.arrive_load_weight = np.array([start_load_weight])
         #    return
         demand_vary = np.cumsum(demand)
@@ -366,11 +362,13 @@ class Route:
         '''
         在i之前插入点
         '''
-        assert 1 <= i and i <= len(self.visit)-1
         i = int(i)
+        assert 1 <= i and i <= len(self.visit)-1
         # 插入访问节点
         self.visit.insert(i, node)
+        self.clear_status()
         return
+
         # 更新两点距离
         self.adjacent_distance[i-1] = node.distance_to(self.visit[i-1])
         new_distance = node.distance_to(self.visit[i+1])
@@ -459,10 +457,12 @@ class Route:
         '''
         删除i
         '''
-        assert 1 <= i and i <= len(self.visit)-1
         i = int(i)
+        assert 1 <= i and i <= len(self.visit)-1
         del self.visit[i]
+        self.clear_status()
         return
+
         # 删除相邻距离
         self.adjacent_distance = np.delete(self.adjacent_distance, i)
         self.adjacent_distance[i-1] = self.visit[i-1].distance_to(self.visit[i+1])
@@ -507,6 +507,30 @@ class Route:
         self.arrive_time = np.delete(self.arrive_time, i)
         self.cal_arrive_time_after_index(vehicle, i-1)
         # self.cal_arrive_time(vehicle)
+
+    def replace_node(self, vehicle: Vehicle, i: int, node: Node) -> None:
+        i = int(i)
+        assert 1 <= i and i <= len(self.visit)-1
+        self.visit[i] = node
+        self.clear_status()
+
+    def add_nodes(self, vehicle: Vehicle, i: int, node_list: list) -> None:
+        assert 1 <= i and i <= len(self.visit)-1
+        i = int(i)
+        self.visit = self.visit[:i]+node_list+self.visit[i:]
+        self.clear_status()
+
+    def del_nodes(self, vehicle: Vehicle, start: int, end: int) -> None:
+        start = int(start)
+        end = int(end)
+        del self.visit[start:end]
+        self.clear_status()
+
+    def replace_nodes(self, vehicle: Vehicle, start: int, end: int, node_list: list) -> None:
+        start = int(start)
+        end = int(end)
+        self.visit[start:end] = node_list
+        self.clear_status()
 
 
 class Model:
@@ -675,12 +699,6 @@ class Solution:
 
     def copy(self) -> object:
         ret = Solution([route.copy() for route in self.routes])
-        ret.id = self.id[:]
-        ret.next_id = self.next_id
-        return ret
-
-    def copy_clear(self) -> object:
-        ret = Solution([route.copy_clear() for route in self.routes])
         ret.id = self.id[:]
         ret.next_id = self.next_id
         return ret
