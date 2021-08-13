@@ -117,6 +117,6 @@ class Util:
         if mode == 'n':
             icecube = None
         elif mode == 'c':
-            icecube = pickle.load(open('result/{}_evo{}.pickle'.format(filename.split('.')[0], suffix), 'rb'))
+            icecube = pickle.load(open('result/{}/{}_evo{}.pickle'.format(file_type, filename.split('.')[0], suffix), 'rb'))
 
-        return filepath, icecube
+        return filepath, file_type, icecube
