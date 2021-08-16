@@ -713,12 +713,15 @@ class Model:
             if line == '\n':
                 continue
             if num == 1:
+                depot_over_time = float(line.split()[0])
+                if depot_over_time == 0:
+                    depot_over_time = float('inf')
                 self.vehicle.capacity = float(line.split()[1])
             if num <= 1:  # 跳过无关行
                 continue
             cus_no, x_coord, y_coord, _, demand, *_ = [float(x) for x in line.split()]
             if cus_no == 0:
-                self.depot = Depot(int(cus_no), x_coord, y_coord, over_time=float('inf'))
+                self.depot = Depot(int(cus_no), x_coord, y_coord, over_time=depot_over_time)
             else:
                 cus = Customer(int(cus_no), x_coord, y_coord, demand, ready_time=0, over_time=float('inf'), service_time=10)
                 self.customers.append(cus)
