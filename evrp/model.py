@@ -22,7 +22,10 @@ class Node(metaclass=ABCMeta):
         # return '{} {} at {}'.format(type(self).__name__, self.id, id(self))
         return '{} {}'.format(type(self).__name__, self.id)
 
-    def eq(self, other) -> bool:
+    def __hash__(self) -> str:
+        return hash(self.__class__.__name__+str(self.id))
+
+    def __eq__(self, other) -> bool:
         if type(self) != type(other):
             return False
         if self.id == other.id:

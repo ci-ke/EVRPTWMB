@@ -128,7 +128,7 @@ class VNS_TS(Evolution):
             for node2 in all_node_list:
                 if (isinstance(node1, Depot) and isinstance(node2, Recharger) and (node1.x == node2.x and node1.y == node2.y)) or (isinstance(node1, Recharger) and isinstance(node2, Depot) and (node1.x == node2.x and node1.y == node2.y)):
                     continue
-                if not node1.eq(node2):
+                if not node1 == node2:
                     distance = node1.distance_to(node2)
                     if isinstance(node1, Customer) and isinstance(node2, Customer) and (node1.demand+node2.demand) > self.model.vehicle.capacity:
                         continue
@@ -141,6 +141,8 @@ class VNS_TS(Evolution):
                         recharger2 = self.model.nearest_station[node2][0]
                         if self.model.vehicle.battery_cost_speed*(node1.distance_to(recharger1)+distance+node2.distance_to(recharger2)) > self.model.vehicle.max_battery:
                             continue
+                    if distance == 0:
+                        distance = 0.0000001
                     self.possible_arc[(node1, node2)] = distance
 
     def select_possible_arc(self, N: int) -> list:
@@ -150,7 +152,7 @@ class VNS_TS(Evolution):
             values = [self.possible_arc[key] for key in keys]
             values = np.array(values)
             values = 1/values
-            values = values/np.sum(values)
+            #values = values/np.sum(values)
             select = Util.wheel_select(values)
             selected_arc.append(keys[select])
             del keys[select]
@@ -358,6 +360,7 @@ class DEMA(Evolution):
         for key, value in param.items():
             assert hasattr(self, key)
             setattr(self, key, value)
+        assert self.size >= 4
 
     @ staticmethod
     def get_objective_route(route: Route, vehicle: Vehicle, penalty: tuple) -> float:
