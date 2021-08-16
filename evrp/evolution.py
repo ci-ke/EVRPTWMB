@@ -14,7 +14,7 @@ class Evolution(metaclass=ABCMeta):
         if not os.path.exists('result/'+self.model.file_type):
             os.mkdir('result/'+self.model.file_type)
         filename = self.model.data_file.split('/')[-1].split('.')[0]
-        output_file = open('result/{}/{}{}.txt'.format(self.model.file_type, filename, suffix), 'a')
+        output_file = open('result/{}/{}{}{}.txt'.format(self.model.file_type, filename, '' if self.model.negative_demand == 0 else '_neg'+str(self.model.negative_demand), suffix), 'a')
         output_file.write(str(self.S_best)+'\n'+str(self.S_best.sum_distance())+'\n'+str(self.S_best.feasible_detail(self.model))+'\n\n')
         output_file.close()
 
@@ -26,7 +26,7 @@ class Evolution(metaclass=ABCMeta):
         filename = self.model.data_file.split('/')[-1].split('.')[0]
 
         num = 1
-        base_pickle_filepath = 'result/{}/{}_evo{}.pickle'.format(self.model.file_type, filename, suffix)
+        base_pickle_filepath = 'result/{}/{}{}_evo{}.pickle'.format(self.model.file_type, filename, '' if self.model.negative_demand == 0 else '_neg'+str(self.model.negative_demand), suffix)
         pickle_filepath = base_pickle_filepath
         while os.path.exists(pickle_filepath):
             pickle_filepath = base_pickle_filepath[:-7]+str(num)+base_pickle_filepath[-7:]
@@ -696,7 +696,7 @@ class DEMA(Evolution):
         if icecube is None:
             P = self.initialization()
         else:
-            self.S_best, self.min_cost, P = icecube
+            self.model, self.S_best, self.min_cost, P = icecube
         self.update_S(P)
         for iter in range(self.maxiter_evo):
             print(iter, len(self.S_best), self.min_cost)
@@ -708,4 +708,4 @@ class DEMA(Evolution):
         return self.S_best, self.min_cost
 
     def freeze(self) -> list:
-        return [self.S_best, self.min_cost, self.P]
+        return [self.model, self.S_best, self.min_cost, self.P]

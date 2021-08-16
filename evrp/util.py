@@ -89,12 +89,13 @@ class Util:
     def process_input(input_list: list):
         file_type = input_list[1]  # n s5 s10 s15
         map_name = input_list[2]  # c101 r201
-        mode = input_list[3]  # n(new) c(continue)
-        if len(input_list) == 5:
-            if input_list[4] == '.':
+        negative_demand = int(input_list[3])
+        mode = input_list[4]  # n(new) c(continue)
+        if mode == 'c':
+            if input_list[5] == '.':
                 suffix = ''
             else:
-                suffix = input_list[4]  # _ahead
+                suffix = input_list[5]  # _ahead
 
         if file_type == 's5':
             folder = 'data/small_evrptw_instances/Cplex5er/'
@@ -105,18 +106,23 @@ class Util:
         elif file_type == 's15':
             folder = 'data/small_evrptw_instances/Cplex15er/'
             filename = map_name+'C15.txt'
-        elif file_type == 'n':
+        elif file_type == 'e':
             folder = 'data/evrptw_instances/'
             filename = map_name+'_21.txt'
         elif file_type == 'tw':
             folder = 'data/solomon/'
             filename = map_name+'.txt'
+        elif file_type == 'p':
+            folder = 'data/p/'
+            filename = map_name+'.txt'
+        else:
+            raise Exception('impossible')
 
         filepath = folder+filename
 
         if mode == 'n':
             icecube = None
         elif mode == 'c':
-            icecube = pickle.load(open('result/{}/{}_evo{}.pickle'.format(file_type, filename.split('.')[0], suffix), 'rb'))
+            icecube = pickle.load(open('result/{}/{}{}_evo{}.pickle'.format(file_type, filename.split('.')[0], '' if negative_demand == 0 else '_neg'+str(negative_demand), suffix), 'rb'))
 
-        return filepath, file_type, icecube
+        return filepath, file_type, icecube, negative_demand

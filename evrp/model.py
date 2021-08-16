@@ -537,6 +537,7 @@ class Model:
     # 构造属性
     data_file = ''
     file_type = ''
+    negative_demand = 0
     vehicle = Vehicle()
     max_vehicle = 0
     depot = None
@@ -545,14 +546,26 @@ class Model:
     # 计算属性
     nearest_station = {}
 
-    def __init__(self, data_file: str = '', file_type: str = '', **para) -> None:
+    def __init__(self, data_file: str = '', file_type: str = '', negative_demand=0, **para) -> None:
         self.data_file = data_file
         self.file_type = file_type
+        self.negative_demand = negative_demand
         for key, value in para.items():
             assert hasattr(self, key)
             setattr(self, key, value)
 
     def read_data(self) -> None:
+        if self.file_type in ['e', 's5', 's10', 's15']:
+            self.__read_data_normal()
+        elif self.file_type == 'tw':
+            self.__read_data_solomon()
+        elif self.file_type == 'p':
+            self.__read_data_p()
+        else:
+            raise Exception('impossible')
+        self.set_negative_demand(self.negative_demand)
+
+    def __read_data_normal(self) -> None:
         assert len(self.data_file) != 0
         with open(self.data_file) as f:
             meet_empty_line = False
@@ -643,6 +656,8 @@ class Model:
         return min_station
 
     def set_negative_demand(self, every: int) -> None:
+        if every == 0:
+            return
         for i, cus in enumerate(self.customers):
             if i % every == every-1:
                 cus.demand = -cus.demand
@@ -668,22 +683,14 @@ class Model:
         ret.rechargers = np.array([])  # 充电桩索引 向量
         return ret
 
-    def read_data_as_VRP(self) -> None:
-        self.read_data()
-        self.rechargers = []
-        self.depot.over_time = float('inf')
-        for cus in self.customers:
-            cus.ready_time = 0
-            cus.over_time = float('inf')
-        self.vehicle.battery_cost_speed = 0
-
-    def __read_solomon_data(self):
+    def __read_data_solomon(self):
         fp = open(self.data_file)
         self.vehicle = Vehicle(max_battery=float('inf'), battery_cost_speed=0, velocity=1)
         self.customers = []
+        self.rechargers = []
         for num, line in enumerate(fp.readlines()):
             if num == 4:
-                self.vehicle.capacity = int(line.split()[1])
+                self.vehicle.capacity = float(line.split()[1])
             if num <= 8:  # 跳过无关行
                 continue
             cus_no, x_coord, y_coord, demand, ready_time, over_time, service_time = [float(x) for x in line.split()]
@@ -694,9 +701,25 @@ class Model:
                 self.customers.append(cus)
         fp.close()
 
-    def read_data_as_VRPTW(self) -> None:
-        self.__read_solomon_data()
+    def __read_data_p(self) -> None:
+        fp = open(self.data_file)
+        self.vehicle = Vehicle(max_battery=float('inf'), battery_cost_speed=0, velocity=1)
+        self.customers = []
         self.rechargers = []
+        for num, line in enumerate(fp.readlines()):
+            if line == '\n':
+                continue
+            if num == 1:
+                self.vehicle.capacity = float(line.split()[1])
+            if num <= 1:  # 跳过无关行
+                continue
+            cus_no, x_coord, y_coord, _, demand, *_ = [float(x) for x in line.split()]
+            if cus_no == 0:
+                self.depot = Depot(int(cus_no), x_coord, y_coord, over_time=float('inf'))
+            else:
+                cus = Customer(int(cus_no), x_coord, y_coord, demand, ready_time=0, over_time=float('inf'), service_time=10)
+                self.customers.append(cus)
+        fp.close()
 
 
 class Solution:
