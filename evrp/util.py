@@ -87,15 +87,24 @@ class Util:
 
     @staticmethod
     def process_input(input_list: list):
-        file_type = input_list[1]  # n s5 s10 s15
-        map_name = input_list[2]  # c101 r201
-        negative_demand = int(input_list[3])
-        mode = input_list[4]  # n(new) c(continue)
-        if mode == 'c':
-            if input_list[5] == '.':
-                suffix = ''
-            else:
-                suffix = input_list[5]  # _ahead
+        file_type = input_list[1]  # e/s5/s10/s15/tw/p/jd
+        if file_type != 'jd':
+            map_name = input_list[2]  # c101 r201
+            negative_demand = int(input_list[3])
+            mode = input_list[4]  # n(new) c(continue)
+            if mode == 'c':
+                if input_list[5] == '.':
+                    suffix = ''
+                else:
+                    suffix = input_list[5]  # _ahead
+        else:
+            negative_demand = 0
+            mode = input_list[2]
+            if mode == 'c':
+                if input_list[3] == '.':
+                    suffix = ''
+                else:
+                    suffix = input_list[3]
 
         if file_type == 's5':
             folder = 'data/small_evrptw_instances/Cplex5er/'
@@ -115,6 +124,9 @@ class Util:
         elif file_type == 'p':
             folder = 'data/p/'
             filename = map_name+'.txt'
+        elif file_type == 'jd':
+            folder = 'data/jd/'
+            filename = 'jd.txt'
         else:
             raise Exception('impossible')
 

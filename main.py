@@ -29,5 +29,5 @@ def run(input_list: list) -> None:
 if __name__ == '__main__':
     # random.seed(2021)
     run(sys.argv)
-    # python main.py e/s5/s10/s15/tw/p c101 0(每几个设为负，0为不设置) n(new) 
+    # python main.py e/s5/s10/s15/tw/p c101 0(每几个设为负，0为不设置) n(new)
     # python main.py e/s5/s10/s15/tw/p c101 0(每几个设为负，0为不设置) c(continue) _ahead(文件名中evo后面的，扩展名前面的)

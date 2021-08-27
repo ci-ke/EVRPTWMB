@@ -1,5 +1,6 @@
 import random
 import numpy as np
+import pandas as pd
 from abc import ABCMeta
 
 
@@ -13,10 +14,15 @@ class Node(metaclass=ABCMeta):
     over_time = 0.0
     service_time = 0.0
 
-    def __init__(self, id: int, x: float, y: float) -> None:
+    use_matrix = False
+    dis_matrix = None
+
+    def __init__(self, id: int, x: float, y: float, use_matrix: bool, dis_matrix: object) -> None:
         self.id = id
         self.x = x
         self.y = y
+        self.use_matrix = use_matrix
+        self.dis_matrix = dis_matrix
 
     def __repr__(self) -> str:
         # return '{} {} at {}'.format(type(self).__name__, self.id, id(self))
@@ -35,12 +41,20 @@ class Node(metaclass=ABCMeta):
 
     def distance_to(self, node: object) -> float:
         assert isinstance(node, Node)
-        return ((self.x-node.x)**2+(self.y-node.y)**2)**0.5
+        if not self.use_matrix:
+            return ((self.x-node.x)**2+(self.y-node.y)**2)**0.5
+        else:
+            if self.id == node.id:
+                return 0
+            elif self.id < node.id:
+                return self.dis_matrix[((self.dis_matrix['x'] == self.id) & (self.dis_matrix['y'] == node.id))].iloc[0]['distance']
+            else:
+                return self.dis_matrix[((self.dis_matrix['y'] == self.id) & (self.dis_matrix['x'] == node.id))].iloc[0]['distance']
 
 
 class Depot(Node):
-    def __init__(self, id: int, x: float, y: float, over_time: float) -> None:
-        super().__init__(id, x, y)
+    def __init__(self, id: int, x: float, y: float, over_time: float, use_matrix: bool = False, dis_matrix: object = None) -> None:
+        super().__init__(id, x, y, use_matrix, dis_matrix)
         self.demand = 0.0
         self.ready_time = 0.0
         self.over_time = over_time
@@ -48,8 +62,8 @@ class Depot(Node):
 
 
 class Customer(Node):
-    def __init__(self, id: int, x: float, y: float, demand: float, ready_time: float, over_time: float, service_time: float) -> None:
-        super().__init__(id, x, y)
+    def __init__(self, id: int, x: float, y: float, demand: float, ready_time: float, over_time: float, service_time: float, use_matrix: bool = False, dis_matrix: object = None) -> None:
+        super().__init__(id, x, y, use_matrix, dis_matrix)
         assert over_time >= ready_time
         self.demand = demand
         self.ready_time = ready_time
@@ -58,8 +72,8 @@ class Customer(Node):
 
 
 class Recharger(Node):
-    def __init__(self, id: int, x: float, y: float, over_time: float) -> None:
-        super().__init__(id, x, y)
+    def __init__(self, id: int, x: float, y: float, over_time: float, use_matrix: bool = False, dis_matrix: object = None) -> None:
+        super().__init__(id, x, y, use_matrix, dis_matrix)
         self.demand = 0.0
         self.ready_time = 0.0
         self.over_time = over_time
@@ -564,6 +578,8 @@ class Model:
             self.__read_data_solomon()
         elif self.file_type == 'p':
             self.__read_data_p()
+        elif self.file_type == 'jd':
+            self.__read_data_jd()
         else:
             raise Exception('impossible')
         self.set_negative_demand(self.negative_demand)
@@ -637,7 +653,8 @@ class Model:
                 station00 = station
                 break
         self.nearest_station[self.depot] = sorted(self.rechargers, key=lambda rec: self.depot.distance_to(rec))
-        self.nearest_station[self.depot].remove(station00)
+        if not station00 is None:
+            self.nearest_station[self.depot].remove(station00)
         for cus in self.customers:
             self.nearest_station[cus] = sorted(self.rechargers, key=lambda rec: cus.distance_to(rec))
         for station in self.rechargers:
@@ -688,7 +705,7 @@ class Model:
 
     def __read_data_solomon(self):
         fp = open(self.data_file)
-        self.vehicle = Vehicle(max_battery=float('inf'), battery_cost_speed=0, velocity=1)
+        self.vehicle = Vehicle(max_battery=100, battery_cost_speed=0, velocity=1)
         self.customers = []
         self.rechargers = []
         for num, line in enumerate(fp.readlines()):
@@ -706,7 +723,7 @@ class Model:
 
     def __read_data_p(self) -> None:
         fp = open(self.data_file)
-        self.vehicle = Vehicle(max_battery=float('inf'), battery_cost_speed=0, velocity=1)
+        self.vehicle = Vehicle(max_battery=100, battery_cost_speed=0, velocity=1)
         self.customers = []
         self.rechargers = []
         for num, line in enumerate(fp.readlines()):
@@ -719,13 +736,60 @@ class Model:
                 self.vehicle.capacity = float(line.split()[1])
             if num <= 1:  # 跳过无关行
                 continue
-            cus_no, x_coord, y_coord, _, demand, *_ = [float(x) for x in line.split()]
+            cus_no, x_coord, y_coord, service_time, demand, *_ = [float(x) for x in line.split()]
             if cus_no == 0:
                 self.depot = Depot(int(cus_no), x_coord, y_coord, over_time=depot_over_time)
             else:
-                cus = Customer(int(cus_no), x_coord, y_coord, demand, ready_time=0, over_time=float('inf'), service_time=10)
+                if service_time == 0:
+                    service_time = 10
+                cus = Customer(int(cus_no), x_coord, y_coord, demand, ready_time=0, over_time=float('inf'), service_time=service_time)
                 self.customers.append(cus)
         fp.close()
+
+    def __read_data_jd(self) -> None:
+        dis_matrix_ori = pd.read_csv('data/jd/input_distance-time.txt', names=['id', 'x', 'y', 'distance', 'time'])
+        dis_matrix_ori[['x', 'y']] = dis_matrix_ori[['x', 'y']].astype('int')
+        dis_matrix_ori['distance'] = dis_matrix_ori['distance'].astype('float')
+        node_matrix = pd.read_excel('data/jd/input_node.xlsx', sheet_name=['Customer_data'])['Customer_data']
+        self.customers = []
+        self.rechargers = []
+        for cus_info in node_matrix.itertuples():
+            node_id = int(cus_info[1])
+            node_type = int(cus_info[2])
+            demand = str(cus_info[5])
+            if node_type == 1:
+                self.depot = Depot(node_id, -1, -1, over_time=float('inf'), use_matrix=True)
+            elif node_type == 2:
+                self.customers.append(Customer(node_id, 0, 0, float(demand), ready_time=0, over_time=float('inf'), service_time=0, use_matrix=True))
+            elif node_type == 3:
+                self.customers.append(Customer(node_id, 0, 0, -float(demand), ready_time=0, over_time=float('inf'), service_time=0, use_matrix=True))
+            elif node_type == 4:
+                self.rechargers.append(Recharger(node_id, 0, 0, over_time=float('inf'), use_matrix=True))
+        vehicle_matrix = pd.read_excel('data/jd/input_vehicle_type.xlsx', sheet_name=['Vehicle_data'])['Vehicle_data']
+        capacity = float(vehicle_matrix.iloc[1].iloc[3])
+        max_battery = float(vehicle_matrix.iloc[1].iloc[5])
+        self.vehicle = Vehicle(capacity=capacity, max_battery=max_battery, battery_cost_speed=1, velocity=1)
+        rng = random.Random(100)
+        self.customers = rng.sample(self.customers, 100)
+        self.rechargers = rng.sample(self.rechargers, 20)
+
+        dis_matrix = pd.DataFrame(columns=['x', 'y', 'distance'])
+        selected_id = [0]
+        for node in self.customers+self.rechargers:
+            selected_id.append(node.id)
+        dis_matrix = dis_matrix_ori[dis_matrix_ori['x'].isin(selected_id) & dis_matrix_ori['y'].isin(selected_id) & (dis_matrix_ori['x'] < dis_matrix_ori['y'])].loc[:, ['x', 'y', 'distance']]
+        dis_matrix.index = range(len(dis_matrix))
+        #dis_matrix[['x', 'y']] = dis_matrix[['x', 'y']].astype('int')
+        #dis_matrix['distance'] = dis_matrix['distance'].astype('float')
+
+        self.depot.dis_matrix = dis_matrix
+        for cus in self.customers:
+            cus.dis_matrix = dis_matrix
+        for rec in self.rechargers:
+            rec.dis_matrix = dis_matrix
+        # print(dis_matrix)
+        #print(dis_matrix[((dis_matrix['x'] == 50012) & (dis_matrix['y'] == 50026))].iloc[0]['distance'])
+        # exit()
 
 
 class Solution:
