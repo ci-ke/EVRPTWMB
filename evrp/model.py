@@ -756,22 +756,24 @@ class Model:
         for cus_info in node_matrix.itertuples():
             node_id = int(cus_info[1])
             node_type = int(cus_info[2])
+            x = float(cus_info[3])
+            y = float(cus_info[4])
             demand = str(cus_info[5])
             if node_type == 1:
-                self.depot = Depot(node_id, -1, -1, over_time=float('inf'), use_matrix=True)
+                self.depot = Depot(node_id, x, y, over_time=float('inf'), use_matrix=True)
             elif node_type == 2:
-                self.customers.append(Customer(node_id, 0, 0, float(demand), ready_time=0, over_time=float('inf'), service_time=0, use_matrix=True))
+                self.customers.append(Customer(node_id, x, y, float(demand), ready_time=0, over_time=float('inf'), service_time=0, use_matrix=True))
             elif node_type == 3:
-                self.customers.append(Customer(node_id, 0, 0, -float(demand), ready_time=0, over_time=float('inf'), service_time=0, use_matrix=True))
+                self.customers.append(Customer(node_id, x, y, -float(demand), ready_time=0, over_time=float('inf'), service_time=0, use_matrix=True))
             elif node_type == 4:
-                self.rechargers.append(Recharger(node_id, 0, 0, over_time=float('inf'), use_matrix=True))
+                self.rechargers.append(Recharger(node_id, x, y, over_time=float('inf'), use_matrix=True))
         vehicle_matrix = pd.read_excel('data/jd/input_vehicle_type.xlsx', sheet_name=['Vehicle_data'])['Vehicle_data']
         capacity = float(vehicle_matrix.iloc[1].iloc[3])
         max_battery = float(vehicle_matrix.iloc[1].iloc[5])
         self.vehicle = Vehicle(capacity=capacity, max_battery=max_battery, battery_cost_speed=1, velocity=1)
         rng = random.Random(100)
-        self.customers = rng.sample(self.customers, 100)
-        self.rechargers = rng.sample(self.rechargers, 20)
+        self.customers = rng.sample(self.customers, 200)
+        self.rechargers = rng.sample(self.rechargers, 40)
 
         dis_matrix = pd.DataFrame(columns=['x', 'y', 'distance'])
         selected_id = [0]

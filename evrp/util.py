@@ -2,6 +2,7 @@ import random
 import pickle
 import numpy as np
 import geatpy as ea
+import argparse
 
 
 class Util:
@@ -87,24 +88,37 @@ class Util:
 
     @staticmethod
     def process_input(input_list: list):
-        file_type = input_list[1]  # e/s5/s10/s15/tw/p/jd
-        if file_type != 'jd':
-            map_name = input_list[2]  # c101 r201
-            negative_demand = int(input_list[3])
-            mode = input_list[4]  # n(new) c(continue)
-            if mode == 'c':
-                if input_list[5] == '.':
-                    suffix = ''
-                else:
-                    suffix = input_list[5]  # _ahead
+        parser = argparse.ArgumentParser()
+        new_run = parser.add_mutually_exclusive_group()
+
+        parser.add_argument('file_type', metavar='file_type', choices=['e', 's5', 's10', 's15', 'tw', 'p', 'jd'])
+        parser.add_argument('map_name', nargs='?')
+
+        new_run.add_argument('-n', '--new', action='store_true')
+        new_run.add_argument('-c', '--continue', action='store_true', dest='conti')
+
+        parser.add_argument('-d', '--negtive_demand', type=int, default=0)
+        parser.add_argument('-r', '--read_suffix', default='')
+        parser.add_argument('-s', '--save_suffix', default='')
+
+        args = parser.parse_args(input_list[1:])
+
+        file_type = args.file_type
+        map_name = args.map_name
+        if file_type != 'jd' and map_name is None:
+            print('must give a map name')
+            exit()
+        if args.new:
+            mode = 'n'
+        elif args.conti:
+            mode = 'c'
         else:
-            negative_demand = 0
-            mode = input_list[2]
-            if mode == 'c':
-                if input_list[3] == '.':
-                    suffix = ''
-                else:
-                    suffix = input_list[3]
+            mode = 'n'
+        read_suffix = args.read_suffix
+        save_suffix = args.save_suffix
+        if len(save_suffix) != 0:
+            save_suffix = '_'+save_suffix
+        negative_demand = args.negtive_demand
 
         if file_type == 's5':
             folder = 'data/small_evrptw_instances/Cplex5er/'
@@ -127,14 +141,12 @@ class Util:
         elif file_type == 'jd':
             folder = 'data/jd/'
             filename = 'jd.txt'
-        else:
-            raise Exception('impossible')
 
         filepath = folder+filename
 
         if mode == 'n':
             icecube = None
         elif mode == 'c':
-            icecube = pickle.load(open('result/{}/{}{}_evo{}.pickle'.format(file_type, filename.split('.')[0], '' if negative_demand == 0 else '_neg'+str(negative_demand), suffix), 'rb'))
+            icecube = pickle.load(open('result/{}/{}{}_evo{}.pickle'.format(file_type, filename.split('.')[0], '' if negative_demand == 0 else '_neg'+str(negative_demand), read_suffix), 'rb'))
 
-        return filepath, file_type, icecube, negative_demand
+        return filepath, file_type, icecube, negative_demand, save_suffix
