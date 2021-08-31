@@ -44,11 +44,17 @@ class Plot:
                     model.get_recharger(node_id).x = x
                     model.get_recharger(node_id).y = y
 
-        plt.scatter(model.depot.x, model.depot.y, marker='*', c='red', s=150)
+        figure = plt.gcf()
+        figure.set_size_inches(12, 8)
+
+        depot_node = plt.scatter(model.depot.x, model.depot.y, marker='*', c='red', s=150)
         for cus in model.customers:
-            plt.scatter(cus.x, cus.y, marker='.', c='blue', s=75)
+            if cus.demand > 0:
+                cus_node = plt.scatter(cus.x, cus.y, marker='.', c='blue', s=75)
+            elif cus.demand < 0:
+                neg_cus_node = plt.scatter(cus.x, cus.y, marker='s', s=30)
         for rec in model.rechargers:
-            plt.scatter(rec.x, rec.y, marker='^', c='green', s=75)
+            rec_node = plt.scatter(rec.x, rec.y, marker='^', c='green', s=75)
 
         for route in solution:
             x = []
@@ -58,4 +64,7 @@ class Plot:
                 y.append(node.y)
             plt.plot(x, y)
 
+        plt.legend(handles=[depot_node, cus_node, neg_cus_node, rec_node], labels=['depot', 'linehaul customer', 'backhaul customer', 'recharging station'])
+
+        plt.savefig('result/jd/map.pdf', dpi=600, format='pdf')
         plt.show()

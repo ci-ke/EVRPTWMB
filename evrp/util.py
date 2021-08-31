@@ -90,6 +90,7 @@ class Util:
     def process_input(input_list: list):
         parser = argparse.ArgumentParser()
         new_run = parser.add_mutually_exclusive_group()
+        control_run = parser.add_mutually_exclusive_group()
 
         parser.add_argument('file_type', metavar='file_type', choices=['e', 's5', 's10', 's15', 'tw', 'p', 'jd'])
         parser.add_argument('map_name', nargs='?')
@@ -100,6 +101,9 @@ class Util:
         parser.add_argument('-d', '--negtive_demand', type=int, default=0)
         parser.add_argument('-r', '--read_suffix', default='')
         parser.add_argument('-s', '--save_suffix', default='')
+
+        control_run.add_argument('--ga', action='store_true')
+        control_run.add_argument('--ts', action='store_true')
 
         args = parser.parse_args(input_list[1:])
 
@@ -119,6 +123,15 @@ class Util:
         if len(save_suffix) != 0:
             save_suffix = '_'+save_suffix
         negative_demand = args.negtive_demand
+
+        if args.ga:
+            control = (True, False)
+            save_suffix = '_ga'+save_suffix
+        elif args.ts:
+            control = (False, True)
+            save_suffix = '_ts'+save_suffix
+        else:
+            control = (True, True)
 
         if file_type == 's5':
             folder = 'data/small_evrptw_instances/Cplex5er/'
@@ -149,4 +162,4 @@ class Util:
         elif mode == 'c':
             icecube = pickle.load(open('result/{}/{}{}_evo{}.pickle'.format(file_type, filename.split('.')[0], '' if negative_demand == 0 else '_neg'+str(negative_demand), read_suffix), 'rb'))
 
-        return filepath, file_type, icecube, negative_demand, save_suffix
+        return filepath, file_type, icecube, negative_demand, save_suffix, control

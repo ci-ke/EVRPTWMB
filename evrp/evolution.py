@@ -695,7 +695,7 @@ class DEMA(Evolution):
                         self.S_best = S
                         self.min_cost = cost
 
-    def main(self, icecube: list = None) -> tuple:
+    def main(self, control: tuple = (True, True), icecube: list = None) -> tuple:
         if icecube is None:
             P = self.initialization()
         else:
@@ -703,9 +703,11 @@ class DEMA(Evolution):
         self.update_S(P)
         for iter in range(self.maxiter_evo):
             print(iter, len(self.S_best), self.min_cost)
-            P_child = self.ACO_GM(P)
-            P = self.ISSD(P+P_child, iter)
-            P = self.MVS(P, iter)
+            if control[0]:
+                P_child = self.ACO_GM(P)
+                P = self.ISSD(P+P_child, iter)
+            if control[1]:
+                P = self.MVS(P, iter)
             self.update_S(P)
             self.P = P
         return self.S_best, self.min_cost
