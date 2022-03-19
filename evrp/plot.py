@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
-
-from .model import *
+from Model import *
 
 
 class Plot:

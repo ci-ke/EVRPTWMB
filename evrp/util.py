@@ -1,9 +1,10 @@
 import random
 import pickle
 import numpy as np
-import geatpy as ea
+#import geatpy as ea
 import argparse
-
+from Model import *
+import os
 
 class Util:
     @staticmethod
@@ -18,14 +19,14 @@ class Util:
 
     class SA:
         T0 = 0.0
-        delta_T = 0.0
+        Delta_T = 0.0
 
         def __init__(self, Delta_SA: float, max_iter: int) -> None:
             self.T0 = Delta_SA/np.log(2)
-            self.Delta_T = (self.T0-0.0001)/0.8*max_iter
+            self.Delta_T = (self.T0-0.0001)/max_iter
 
         def probability(self, V_new: float, V: float, iter: int) -> float:
-            return np.exp(-(V_new-V)/(self.T0-self.delta_T*iter))
+            return np.exp(-(V_new-V)/(100*(self.T0-self.Delta_T*iter)))
 
     @staticmethod
     def wheel_select(elements: np.array) -> int:
@@ -65,26 +66,91 @@ class Util:
         return pk_win
 
     @staticmethod
-    def pareto_sort(P: list, objv: list, needNum: int = None, needLevel: int = None):
-        if len(objv) <= 1:
-            return P
-        objv = np.array(objv)
-        levels, criLevel = ea.ndsortESS(objv, needNum, needLevel)
-        dis = ea.crowdis(objv, levels)
-        sortP = []
-        for lv in range(1, criLevel):
-            indexs = np.where(levels == lv)[0]
-            indexs_sorted = sorted(indexs, key=lambda x: dis[x], reverse=True)
-            for i in indexs_sorted:
-                sortP.append(P[i])
-        indexs = np.where(levels == criLevel)[0]
-        indexs_sorted = sorted(indexs, key=lambda x: dis[x], reverse=True)
-        if needNum is None:
-            needNum = len(P)
-        for i in indexs_sorted:
-            if len(sortP) < needNum:
-                sortP.append(P[i])
-        return sortP
+    def map_100(a):
+        a1=np.max(a)
+        a2=np.min(a)
+        length=a1-a2
+        assert length!=0
+        for i in range(len(a)):
+            a[i]=(a[i]-a2)/length*100
+        return a
+
+
+    #@staticmethod
+    #def pareto_sort(P: list, objv: list, needNum: int = None, needLevel: int = None):
+    #    if len(objv) <= 1:
+    #        return P
+    #    objv = np.array(objv)
+    #    levels, criLevel = ea.ndsortESS(objv, needNum, needLevel)
+    #    dis = ea.crowdis(objv, levels)
+    #    sortP = []
+    #    for lv in range(1, criLevel):
+    #        indexs = np.where(levels == lv)[0]
+    #        indexs_sorted = sorted(indexs, key=lambda x: dis[x], reverse=True)
+    #        for i in indexs_sorted:
+    #            sortP.append(P[i])
+    #    indexs = np.where(levels == criLevel)[0]
+    #    indexs_sorted = sorted(indexs, key=lambda x: dis[x], reverse=True)
+    #    if needNum is None:
+    #        needNum = len(P)
+    #    for i in indexs_sorted:
+    #       if len(sortP) < needNum:
+    #            sortP.append(P[i])
+    #   return sortP
+
+    @staticmethod
+    def pareto_sort(P: list, objv: list):
+        assert len(P) == len(objv)
+        c = []
+        m = np.zeros([len(P), len(P)])
+        for i in range(len(objv)):
+            for j in range(i + 1, len(objv)):
+                if ((objv[i][1] < objv[j][1]) & (objv[i][0] < objv[j][0])) or (
+                        (objv[i][1] <= objv[j][1]) & (objv[i][0] < objv[j][0])) or (
+                        (objv[i][1] < objv[j][1]) & (objv[i][0] <= objv[j][0])):
+                    m[i][j] = 1
+                    m[j][i] = 0
+                elif ((objv[i][1] > objv[j][1]) & (objv[i][0] > objv[j][0])) or (
+                        (objv[i][1] >= objv[j][1]) & (objv[i][0] > objv[j][0])) or (
+                        (objv[i][1] > objv[j][1]) & (objv[i][0] >= objv[j][0])):
+                    m[i][j] = 0
+                    m[j][i] = 1
+                else:
+                    m[i][j] = 0
+                    m[j][i] = 0
+        index = []
+        while len(c) != len(P):
+            for i in range(len(objv)):
+                if sum(m[:, i]) == 0:
+                    index.append(i)
+            m[:, index] = 1
+            m[index, :] = 0
+            index.sort(key=lambda j: objv[j][1])
+            for i in range(len(index)):
+                c.append(P[index[i]])
+            index = []
+        assert len(c) == len(P)
+        return c
+
+    @staticmethod
+    def set_model(o:list,n:int=0):
+        '''
+        建立模型
+        :param o: o[0]:数据集类型,o[1]:数据集路径
+        :return:
+        '''
+        if o[0]=='tw':
+            model=Model(o[1], 'tw')
+        elif o[0]=='p':
+            model=Model(o[1],'p',n)
+        elif o[0]=='jd':
+            model=Model('','jd',2)
+        elif o[0] in ['e','s5','s10','s15']:
+            model=Model(o[1],o[0],n)
+        model.read_data()
+        return model
+
+
 
     @staticmethod
     def process_input(input_list: list):
